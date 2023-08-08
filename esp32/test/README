@@ -1,0 +1,35 @@
+
+This directory is intended for PlatformIO Test Runner and project tests.
+
+Unit Testing is a software testing method by which individual units of
+source code, sets of one or more MCU program modules together with associated
+control data, usage procedures, and operating procedures, are tested to
+determine whether they are fit for use. Unit testing finds problems early
+in the development cycle.
+
+More information about PlatformIO Unit Testing:
+- https://docs.platformio.org/en/latest/advanced/unit-testing/index.html
+
+
+
+
+
+
+
+
+Changing the Throttle Mode:
+Set the transmitter's throttle to the maximum position.
+Connect the ESC to power.
+The ESC will begin by emitting a single beep via the motor, followed by a brief pause. It will then incrementally produce more beeps, with a short pause between each set of beeps.
+Wait for the ESC to emit three beeps.
+Before the ESC emits four beeps, move the throttle to the minimum position.
+The ESC will repeatedly alternate between emitting one and two beeps, with a brief pause in between. To activate the desired throttle type, follow the instructions below:
+Uni-directional Mode: Wait for the ESC to emit ONE beep, then proceed to the next step.
+Bi-directional Mode: Wait for the ESC to emit TWO beeps, then proceed to the next step.
+Set the throttle to the minimum position.
+After a few seconds, the motor will produce four rapid alternating beeps to confirm that the throttle type has been saved.
+Power off the ESC.
+The Throttle Mode has been saved. Next continue to Step 2: Throttle Calibration Procedure​ to help ensure the smoothest throttle operation.
+
+*Note: Ensure a motor is connected to hear the beeps, as the ESC generates sound through the motor.
+

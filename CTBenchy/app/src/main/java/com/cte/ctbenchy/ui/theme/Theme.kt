@@ -1,4 +1,4 @@
-package com.example.ctbenchy.ui.theme
+package com.cte.ctbenchy.ui.theme
 
 import android.app.Activity
 import android.os.Build

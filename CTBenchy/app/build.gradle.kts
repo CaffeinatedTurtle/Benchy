@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.ctbenchy"
+    namespace = "com.cte.ctbenchy"
     compileSdk = 33
 
     defaultConfig {
-        applicationId = "com.example.ctbenchy"
+        applicationId = "com.cte.ctbenchy"
         minSdk = 30
         targetSdk = 33
         versionCode = 1

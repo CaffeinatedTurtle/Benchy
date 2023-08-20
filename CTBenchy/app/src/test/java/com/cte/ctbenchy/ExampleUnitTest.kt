@@ -1,4 +1,4 @@
-package com.example.ctbenchy
+package com.cte.ctbenchy
 
 import org.junit.Test
 

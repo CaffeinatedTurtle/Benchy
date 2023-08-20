@@ -1,4 +1,4 @@
-package com.connectiphy.bluetooth
+package com.cte.bluetooth
 
 object Utility {
 

@@ -1,6 +1,7 @@
-package com.connectiphy.bluetooth
+package com.cte.bluetooth
 
 
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattService
 import android.bluetooth.le.ScanResult
@@ -38,6 +39,7 @@ class BluetoothViewModel : ViewModel() {
 
     private var _selectedDevice = MutableLiveData<ScanResult>()
 
+    @SuppressLint("MissingPermission")
     fun selectDevice(result: ScanResult) {
         Log.i(TAG, "select " + result.device.name)
         _selectedDevice.value = result
@@ -101,23 +103,5 @@ class BluetoothViewModel : ViewModel() {
 
     val characteristic: LiveData<BluetoothGattCharacteristic>? = _characteristic
 
-
-    var _serialData = MutableLiveData< ByteArray>()
-
-    fun setSerialData(serialData:  ByteArray) {
-        _serialData.value = serialData
-    }
-
-    val serialData: LiveData<ByteArray>? = _serialData
-
-
-    var _serialPortProtocol = MutableLiveData< SerialPortProtocol>()
-
-    fun setSerialPortProtocol(serialPortProtocol: SerialPortProtocol) {
-        _serialPortProtocol.value = serialPortProtocol
-    }
-
-    val serialPortProtocol: LiveData<SerialPortProtocol>? = _serialPortProtocol
-
-
 }
+

@@ -1,5 +1,6 @@
-package com.connectiphy.bluetooth
+package com.cte.bluetooth
 
+import android.annotation.SuppressLint
 import android.app.Service
 import android.bluetooth.*
 import android.bluetooth.BluetoothDevice.TRANSPORT_LE
@@ -20,6 +21,7 @@ import java.util.concurrent.ConcurrentLinkedDeque
 /**
  * BTLE service to manage GATT devices
  */
+@SuppressLint("MissingPermission")
 class BluetoothService : Service() {
 
     private var bluetoothManager: BluetoothManager? = null
@@ -455,117 +457,18 @@ class BluetoothService : Service() {
         }
     }
 
-    fun createSPPSocket(device: BluetoothDevice){
-        if(bluetoothSocket == null) {
-            bluetoothSocket = try {
-                device.createRfcommSocketToServiceRecord(UUID.fromString(BluetoothAttributes.SPP_PROFILE))
-            } catch (ex: IOException) {
-                Log.e(TAG, "Failed to create RfComm socket: " + ex.toString())
-                return
-            }
-        }
-    }
-
-    fun SPPConnect(mode: Boolean){
-        bluetoothSocket?.let {
-            try {
-                if (!it.isConnected) {
-                    it.connect()
-                }
-            } catch (ex: IOException) {
-                Log.e(TAG, "spp connect failed")
-                return;
-            }
-            if (it.isConnected) {
-            readSpp(mode);
-            }
-        }
-
-    }
-
-    fun readSpp(diagmode: Boolean){
-             var ctx = newSingleThreadContext("sppThread")
-
-             GlobalScope.launch(ctx) {
-                var inputStream = bluetoothSocket?.inputStream
-                 inputStream?.let {
-                     if (diagmode) {
-                         var hdlcInputStream = HDLCInputStream(it)
-                         while (true) {
-                             if (!bluetoothSocket!!.isConnected) {
-                                 break;
-                             }
-                             try {
-                                 var frame = hdlcInputStream.readFrame(2048)
-                                 broadcastUpdate(ACTION_DATA_AVAILABLE, frame);
-                             } catch(e: Exception){
-                                 break;
-                             }
-                         }
-                     } else {
-                         var bufferedReader = BufferedReader(InputStreamReader(it, "UTF-8"))
-                         while (true) {
-                             if (!bluetoothSocket!!.isConnected) {
-                                 break;
-                             }
-                             var data = bufferedReader.readLine()
-                             broadcastUpdate(ACTION_DATA_AVAILABLE, data.encodeToByteArray());
-                         }
-                     }
-                 }
-
-            }
-
-    }
-
-    fun SPPDisconnect(){
-        if (isSppConnected()){
-            if(GlobalScope.isActive) {
-                try {
-                    GlobalScope.coroutineContext.cancel(null)
-
-                } catch(e:Exception){
-                    Log.e(TAG,e.localizedMessage)
-                }
-            }
-            bluetoothSocket?.close();
-            bluetoothSocket = null;
-        }
-    }
-
-    fun isSppConnected(): Boolean{
-       return  (bluetoothSocket != null && bluetoothSocket!!.isConnected)
-    }
-
-    fun writeSppData(data: ByteArray){
-        try {
-            val outputStream =bluetoothSocket?.getOutputStream()
-            outputStream?.write(data)
-            outputStream?.flush()
-        } catch (ex: IOException) {
-            Log.e(TAG, "Failed to write a command: $ex")
-            return
-        }
-    }
-
-
-
-
-
-
-    // bluetooth classic bits
-
     fun getDevice(address: ByteArray) :BluetoothDevice?{
         var btDevice: BluetoothDevice? = null
         var macAddressStr = Utility.ByteArrayToMacAddrString(address)
         val bondedDevices: Set<BluetoothDevice> = bluetoothAdapter!!.getBondedDevices()
         for (dev in bondedDevices) {
-             if (dev.address.contains(macAddressStr)){
-                 return dev;
-             }
+            if (dev.address.contains(macAddressStr)){
+                return dev;
+            }
         }
         return btDevice;
     }
+
 
 
 
@@ -614,15 +517,15 @@ class BluetoothService : Service() {
 
         val SPP_CONNECT_RETRY = 3
 
-        val ACTION_GATT_CONNECTED = "com.connectiphy.bluetooth.ACTION_GATT_CONNECTED"
-        val ACTION_GATT_DISCONNECTED = "com.connectiphy.bluetooth.ACTION_GATT_DISCONNECTED"
+        val ACTION_GATT_CONNECTED = "com.cte.bluetooth.ACTION_GATT_CONNECTED"
+        val ACTION_GATT_DISCONNECTED = "com.cte.bluetooth.ACTION_GATT_DISCONNECTED"
         val ACTION_GATT_SERVICES_DISCOVERED =
             "com.example.bluetooth.le.ACTION_GATT_SERVICES_DISCOVERED"
-        val ACTION_DATA_AVAILABLE = "ccom.connectiphy.bluetooth.ACTION_DATA_AVAILABLE"
-        val EXTRA_DATA = "com.connectiphy.bluetooth.EXTRA_DATA"
-        val EXTRA_UUID = "ccom.connectiphy.bluetooth.EXTRA_UUID"
-        val ACTION_SPP_CONNECTED = "com.connectiphy.bluetooth.ACTION_SPP_CONNECTED"
-        val ACTION_SPP_DISCONNECTED = "com.connectiphy.bluetooth.ACTION_SPP_DISCONNECTED"
+        val ACTION_DATA_AVAILABLE = "ccom.cte.bluetooth.ACTION_DATA_AVAILABLE"
+        val EXTRA_DATA = "com.cte.bluetooth.EXTRA_DATA"
+        val EXTRA_UUID = "ccom.cte.bluetooth.EXTRA_UUID"
+        val ACTION_SPP_CONNECTED = "com.cte.bluetooth.ACTION_SPP_CONNECTED"
+        val ACTION_SPP_DISCONNECTED = "com.cte.bluetooth.ACTION_SPP_DISCONNECTED"
 
 
     }

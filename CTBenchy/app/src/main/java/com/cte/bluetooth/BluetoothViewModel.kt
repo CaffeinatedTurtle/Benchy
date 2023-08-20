@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.collections.ArrayList
 
 
+@SuppressLint("MissingPermission")
 class BluetoothViewModel : ViewModel() {
     private val TAG = BluetoothViewModel::class.java.simpleName
 
@@ -39,7 +40,6 @@ class BluetoothViewModel : ViewModel() {
 
     private var _selectedDevice = MutableLiveData<ScanResult>()
 
-    @SuppressLint("MissingPermission")
     fun selectDevice(result: ScanResult) {
         Log.i(TAG, "select " + result.device.name)
         _selectedDevice.value = result

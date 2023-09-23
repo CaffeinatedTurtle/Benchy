@@ -6,6 +6,7 @@
 #include <Servo.h>
 
 #include <Preferences.h>
+#include "driver/gpio.h"
 
 Preferences preferences;
 
@@ -19,8 +20,23 @@ Preferences preferences;
 #define MODE_BI 1
 #define MODE_PROGRAM 2
 
-int rudderPin = 13;
-int throttlePin = 12;
+#define RUDDER_PIN 13
+#define THROTTLE_PIN 12
+
+#define LED_GREEN_PIN  GPIO_NUM_5
+#define LED_RED_PIN GPIO_NUM_21
+#define LED_WHITE_PIN GPIO_NUM_19
+
+#define LED_GREEN 1
+#define LED_RED 2
+#define LED_WHITE 4
+
+
+int rudderPin = RUDDER_PIN;
+int throttlePin = THROTTLE_PIN;
+
+
+
 
 boolean connected = false;
 
@@ -156,11 +172,38 @@ uint8_t getLed()
   return *dataPtr;
 }
 
+void setLed (uint8_t led){
+  if (led & LED_RED){
+     gpio_set_level((gpio_num_t)LED_RED_PIN, 1);
+  } else {
+     gpio_set_level((gpio_num_t)LED_RED_PIN, 0);
+  }
+    if (led & LED_GREEN){
+     gpio_set_level((gpio_num_t)LED_GREEN_PIN, 1);
+  } else {
+     gpio_set_level((gpio_num_t)LED_GREEN_PIN, 0);
+  }
+      if (led & LED_WHITE){
+     gpio_set_level((gpio_num_t)LED_WHITE_PIN, 1);
+  } else {
+     gpio_set_level((gpio_num_t)LED_WHITE_PIN, 0);
+  }
+}
+
 void loadPreferences()
 {
   mode = preferences.getUChar("mode", 0);
   Serial.printf("loaded preferences mode = %d\n", mode);
   setMode(mode);
+}
+
+void initLed(){
+    gpio_pad_select_gpio(LED_RED);
+  gpio_set_direction((gpio_num_t)LED_RED_PIN, GPIO_MODE_OUTPUT);
+    gpio_pad_select_gpio((gpio_num_t)LED_GREEN_PIN);
+  gpio_set_direction((gpio_num_t)LED_GREEN_PIN, GPIO_MODE_OUTPUT);
+    gpio_pad_select_gpio(LED_WHITE_PIN);
+  gpio_set_direction((gpio_num_t)LED_WHITE_PIN, GPIO_MODE_OUTPUT);
 }
 
 void setup()
@@ -196,6 +239,9 @@ void setup()
   loadPreferences();
   setRudderAngle(0);
 
+
+  initLed();
+  setLed(0);
   // bidirectional set throttle at midpoint when starting
   // program mode set throttle at max when starting
   // unidirectional mode set throttle a 0 when starting
@@ -246,6 +292,8 @@ void loop()
   throttlePosition = getThrottle();
   rudderAngle = getRudderAngle();
   rudder.write(rudderAngle + (MAX_RUDDER / 2));
+  uint8_t led = getLed();
+  setLed(led);
   long t1 = millis();
   if (t1 % 500 == 0)
   { // print a debug every 1/2 second
@@ -257,6 +305,6 @@ void loop()
     } else {
       connected=true;
     }
-    Serial.printf("rudder angle %03d throttle position %03d duty cycle %03d rudder %d  led: %2x mode:%d  connected%d\r", rudderAngle, throttlePosition, throttleServoPosition, rudderAngle,getLed(), mode, pServer->getConnectedCount());
+    Serial.printf("rudder angle %03d throttle position %03d duty cycle %03d rudder %d  ledRed: %1x ledWhite %1x ledGreen %1xmode:%d  connected%d\r", rudderAngle, throttlePosition, throttleServoPosition, rudderAngle,led&LED_RED,led&LED_WHITE , led&LED_GREEN, mode, pServer->getConnectedCount());
   }
 }

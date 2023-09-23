@@ -520,12 +520,11 @@ class BluetoothService : Service() {
         val ACTION_GATT_CONNECTED = "com.cte.bluetooth.ACTION_GATT_CONNECTED"
         val ACTION_GATT_DISCONNECTED = "com.cte.bluetooth.ACTION_GATT_DISCONNECTED"
         val ACTION_GATT_SERVICES_DISCOVERED =
-            "com.example.bluetooth.le.ACTION_GATT_SERVICES_DISCOVERED"
+            "com.cte.bluetooth.le.ACTION_GATT_SERVICES_DISCOVERED"
         val ACTION_DATA_AVAILABLE = "ccom.cte.bluetooth.ACTION_DATA_AVAILABLE"
         val EXTRA_DATA = "com.cte.bluetooth.EXTRA_DATA"
         val EXTRA_UUID = "ccom.cte.bluetooth.EXTRA_UUID"
-        val ACTION_SPP_CONNECTED = "com.cte.bluetooth.ACTION_SPP_CONNECTED"
-        val ACTION_SPP_DISCONNECTED = "com.cte.bluetooth.ACTION_SPP_DISCONNECTED"
+
 
 
     }

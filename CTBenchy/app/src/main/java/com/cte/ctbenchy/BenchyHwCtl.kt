@@ -1,23 +1,75 @@
 package com.cte.ctbenchy
 
+import android.Manifest
 import android.app.Activity
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
 import android.content.Context
-import android.os.Parcel
-import android.os.Parcelable
+import android.content.pm.PackageManager
+import android.util.Log
+import androidx.core.app.ActivityCompat
 import com.cte.bluetooth.BluetoothHandler
 import com.cte.bluetooth.BluetoothViewModel
 import com.cte.bluetooth.IBluetoothListener
 import java.util.UUID
 
-class BenchGattImpl() : IBluetoothListener {
+class BenchyHwCtl() : IBluetoothListener {
+    private  final val  TAG = "BenchyHwCtl"
     private var bluetoothAdapter: BluetoothAdapter? = null
     private var bluetoothHandler: BluetoothHandler? = null
     private lateinit var context: Activity
     private lateinit var model: BluetoothViewModel
 
 
-    fun initialize(ctx:Context){
+    fun initialize(ctx:MainActivity,viewModel: BluetoothViewModel){
+        val bluetoothManager = ctx.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        bluetoothAdapter = bluetoothManager.adapter
+
+        bluetoothAdapter?.let {
+            bluetoothHandler =
+                BluetoothHandler(viewModel, it)
+        }
+        bluetoothHandler?.listener = this;
+        bluetoothHandler?.scanLeDevice(true)
+
+       viewModel.deviceList!!.observe(ctx, androidx.lifecycle.Observer {
+
+            if (ActivityCompat.checkSelfPermission(
+                    ctx,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                Log.i(TAG, "NO bluetooth granted")
+            }
+            var found=false;
+            for (device in it) {
+
+                Log.i(TAG, "device ${device.device.name}  ${device.scanRecord}")
+                device.scanRecord?.serviceUuids?.let{ services->
+                    Log.i(TAG,"service data found ${services}")
+                    for (uuid in services){
+                        Log.i(TAG, " uuid ${uuid.toString()}")
+                        if (uuid.uuid == SERVICE_UUID) {
+                            Log.i(TAG, "Found Benchy")
+                            viewModel?.selectDevice(device)
+                            bluetoothHandler?.connect()
+                            found = true
+                            break
+                        }
+                    }
+                }
+                if (found)break
+            }
+
+
+        })
+        viewModel.services!!.observe(ctx,androidx.lifecycle.Observer {
+            Log.i(TAG,"found services")
+            for (service in it){
+                Log.i(TAG,"is Benchy "+service.uuid.toString() )
+                Log.i(TAG,"service uuid "+service.uuid)
+            }
+        })
 
     }
 
@@ -29,13 +81,6 @@ class BenchGattImpl() : IBluetoothListener {
        val LED_CHARACTERISTIC_UUID = UUID.fromString("3a84a192-d522-46ef-b7c8-36b9fc062490")
     }
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
-
-    }
-
-    override fun describeContents(): Int {
-        return 0
-    }
 
     override fun onConnect() {
         TODO("Not yet implemented")

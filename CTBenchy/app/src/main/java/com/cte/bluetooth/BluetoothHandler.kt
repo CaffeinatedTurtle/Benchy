@@ -147,27 +147,22 @@ class BluetoothHandler(
     
             override fun onScanResult(callbackType: Int, result: ScanResult) {
                 result.device.name?.let {
-                    deviceList.put(result.device.name, result)
+                    deviceList[result.device.name] = result
 
-                    Log.i(
-                        TAG,
-                        "device list add " + result.device.name + " length " + deviceList.size + " uuids:" + result.device?.uuids?.size
-                    )
                     result.device.uuids?.let {
                         for (uuit in it) {
-                            Log.i(TAG, "uuid " + uuit.uuid.toString())
+                           // Log.i(TAG, "uuid " + uuit.uuid.toString())
                         }
                     }
-                    Log.i(TAG, "uuds from scan record")
                     result.scanRecord?.serviceUuids?.let {
                         for (uuit in it) {
-                            Log.i(TAG, "uuid " + uuit.uuid.toString())
+                            //Log.i(TAG, "uuid " + uuit.uuid.toString())
                         }
                     }
 
                 }
                 if (deviceList.size != currentNumberOfDevices) {
-                    Log.i(TAG, "Scan push " + deviceList.size)
+                    Log.i(TAG, "Scan push  " + deviceList.size)
                     devices = ArrayList(deviceList.values)
                     bluetoothViewModel.setDevices(devices!!)
                     currentNumberOfDevices = deviceList.size
@@ -205,7 +200,7 @@ class BluetoothHandler(
                     if (isScanning) {
                         scanner?.stopScan(leScanCallback)
                         isScanning = false
-                        Log.i(TAG, "stop scaning to")
+                        Log.i(TAG, "stop scanning ")
                         bluetoothViewModel.setScanning(isScanning)
                     }
                 }, SCAN_PERIOD)
@@ -330,7 +325,7 @@ class BluetoothHandler(
         override fun unpair(device: BluetoothDevice?) {
             device?.let {
                 if (it.bondState == BluetoothDevice.BOND_BONDED) {
-                    if (it.name.contains("PeikerC4")) {
+                    if (it.name.contains("CTBenchy")) {
                         Log.i(TAG, "Unpair Peiker")
                         bluetoothService?.unpairDevice(it)
                     }
@@ -391,7 +386,7 @@ companion object {
 
         private val REQUEST_ENABLE_BT = 1
         // Stops scanning after 10 seconds.
-        private val SCAN_PERIOD: Long = 10000
+        private val SCAN_PERIOD: Long = 100000
     }
 }
 

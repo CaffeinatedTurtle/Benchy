@@ -54,7 +54,23 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        benchyHwCtl?.onResume(this)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        benchyHwCtl?.onPause(this)
+    }
+    override fun onDestroy() {
+        super.onDestroy()
+        benchyHwCtl?.onDestroy(this)
+    }
+
 }
+
+
 
 @Composable
 fun Greeting(name: String, modifier: Modifier = Modifier) {

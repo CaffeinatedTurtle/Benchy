@@ -96,7 +96,7 @@ class BluetoothHandler(
     val gattUpdateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val action = intent.action
-            Log.v(TAG, "Action: " + action)
+            Log.i(TAG, "Action: " + action)
             if (BluetoothDevice.ACTION_BOND_STATE_CHANGED == action) {
                 // this get received the first time the device trie to set the notification
                 // config and the notification complete doesn't happen
@@ -174,6 +174,7 @@ class BluetoothHandler(
                 Log.i(TAG, "Scan error " + errorCode)
                 super.onScanFailed(errorCode)
             }
+
         }
 
         init {
@@ -222,6 +223,15 @@ class BluetoothHandler(
         }
 
         override fun connect() {
+            Log.i(TAG,"BATMAN connect to ${bluetoothService} ${bluetoothViewModel.selectedDevice!!.value!!.device.address}")
+            handler?.let{
+                it.postDelayed({
+                    // add delay for scanning to stop
+                    var result =
+                        bluetoothService?.connect(bluetoothViewModel.selectedDevice!!.value!!.device.address)
+
+                }, 600)
+            }
             var result =
                 bluetoothService?.connect(bluetoothViewModel.selectedDevice!!.value!!.device.address)
         }

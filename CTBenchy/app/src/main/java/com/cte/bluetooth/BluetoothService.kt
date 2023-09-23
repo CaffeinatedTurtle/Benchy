@@ -289,7 +289,7 @@ class BluetoothService : Service() {
         // We want to directly connect to the device, so we are setting the autoConnect
         // parameter to false.
         mBluetoothGatt = device.connectGatt(this, false, mGattCallback, TRANSPORT_LE)
-        Log.d(TAG, "Trying to create a new connection.")
+        Log.d(TAG, "Trying to create a new connection. ${device.address}")
         bluetoothDeviceAddress = address
         connectionState = STATE_CONNECTING
         return true

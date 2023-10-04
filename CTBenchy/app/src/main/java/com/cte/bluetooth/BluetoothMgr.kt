@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Service
 import android.bluetooth.*
 import android.bluetooth.BluetoothDevice.TRANSPORT_LE
+import android.bluetooth.le.BluetoothLeScanner
 import android.content.Context
 import android.content.Intent
 import android.os.Binder
@@ -15,11 +16,21 @@ import java.util.*
 import java.util.concurrent.ConcurrentLinkedDeque
 
 
+
+interface IBluetoothMgr{
+    fun onConnect()
+    fun onDisconnect()
+
+    fun onServicesDiscovered()
+
+    fun onDataRecieved(uuid:UUID,value:ByteArray)
+}
+
 /**
  * BTLE service to manage GATT devices
  */
 @SuppressLint("MissingPermission")
-class BluetoothService : Service() {
+class BluetoothMgr {
 
     private var bluetoothManager: BluetoothManager? = null
     private var bluetoothAdapter: BluetoothAdapter? = null
@@ -28,8 +39,11 @@ class BluetoothService : Service() {
     private var connectionState = STATE_DISCONNECTED
     private var rqueue = ConcurrentLinkedDeque<BTrequest>()
     private var isQueueRunning = false;
+    lateinit var listener:IBluetoothMgr
+    lateinit var ctx:Context
 
-    private var bluetoothSocket: BluetoothSocket? = null
+
+
 
     private var isReady =false;
 
@@ -40,9 +54,7 @@ class BluetoothService : Service() {
             val intentAction: String
             Log.i(TAG, "newstate " + newState)
             if (newState == BluetoothProfile.STATE_CONNECTED) {
-                intentAction = ACTION_GATT_CONNECTED
-                connectionState = STATE_CONNECTED
-                broadcastUpdate(intentAction)
+                 connectionState = STATE_CONNECTED
                 Log.i(TAG, "Connected to GATT server.")
                 // Attempts to discover services after successful connection.
                 Log.i(
@@ -53,10 +65,8 @@ class BluetoothService : Service() {
                 mBluetoothGatt?.discoverServices()
 
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                intentAction = ACTION_GATT_DISCONNECTED
-                connectionState = STATE_DISCONNECTED
+                 connectionState = STATE_DISCONNECTED
                 Log.i(TAG, "Disconnected from GATT server.")
-                broadcastUpdate(intentAction)
                 rqueue.clear()
             }
         }
@@ -64,8 +74,12 @@ class BluetoothService : Service() {
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             Log.v(TAG, "services discovered status:" + status)
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                broadcastUpdate(ACTION_GATT_SERVICES_DISCOVERED)
-                execute()
+                 for (service in gatt.services){
+                     service.characteristics
+                 }
+
+                 listener.onServicesDiscovered()
+                 execute()
             } else {
                 Log.w(TAG, "onServicesDiscovered received: $status")
             }
@@ -77,6 +91,7 @@ class BluetoothService : Service() {
             Log.v(TAG, "MTU exchanged")
             isQueueRunning =false;
             isReady=true;
+            listener.onConnect()
             execute()
         }
 
@@ -91,7 +106,8 @@ class BluetoothService : Service() {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 Log.v(TAG, "read characteristic " + characteristic.uuid.toString())
                 next()
-                broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic, value)
+                listener.onDataRecieved(characteristic.uuid, value)
+
             }
 
         }
@@ -107,20 +123,20 @@ class BluetoothService : Service() {
                     TAG,
                     "wrote characteristic " + characteristic.uuid.toString() + " status:" + status
                 )
-                broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic)
+
                 next()
             }
 
         }
 
 
-        override fun onCharacteristicChanged(
-            gatt: BluetoothGatt,
-            characteristic: BluetoothGattCharacteristic
-        ) {
+        override fun onCharacteristicChanged (gatt:BluetoothGatt,
+       characteristic:   BluetoothGattCharacteristic,
+        value:ByteArray) {
             Log.v(TAG, "characteristic changed " + characteristic.uuid.toString())
+            listener.onDataRecieved(characteristic.uuid, value)
             next();
-            broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic)
+
 
         }
 
@@ -136,7 +152,7 @@ class BluetoothService : Service() {
 
     }
 
-    private val mBinder = LocalBinder()
+
 
     /**
      * Retrieves a list of supported GATT services on the connected device. This should be
@@ -145,74 +161,46 @@ class BluetoothService : Service() {
      * @return A `List` of supported services.
      */
     val supportedGattServices: List<BluetoothGattService>?
-        get() = if (mBluetoothGatt == null) null else mBluetoothGatt!!.services
+        get() = mBluetoothGatt?.services
 
-    private fun broadcastUpdate(action: String) {
-        val intent = Intent(action)
-        sendBroadcast(intent)
-    }
+   fun getSupportedCharacteristics (service:BluetoothGattService): List<BluetoothGattCharacteristic>? {
+       return service.characteristics
+   }
 
-    private fun broadcastUpdate(
-        action: String,
-        characteristic: BluetoothGattCharacteristic
-    ){
-        broadcastUpdate(action, characteristic, null)
-    }
+    fun getCharacteristic(uuid:UUID):BluetoothGattCharacteristic?{
+        mBluetoothGatt?.services?.let { services->
+            for (service in services){
+                for (characteristic in service.characteristics){
+                    if(characteristic.uuid == uuid) return characteristic
+                }
+            }
 
-    private fun broadcastUpdate(
-        action: String,
-        data: ByteArray
-    ){
-        broadcastUpdate(action, null, data)
-    }
-
-        private fun broadcastUpdate(
-            action: String,
-            characteristic: BluetoothGattCharacteristic?,
-            data: ByteArray?
-        ) {
-        val intent = Intent(action)
-        characteristic?.let{
-            intent.putExtra(EXTRA_UUID, it.uuid.toString())
-            intent.putExtra(EXTRA_DATA, it.value)
         }
-        data?.let {
-            intent.putExtra(EXTRA_DATA, it)
-        }
+        return null
+    }
 
-        sendBroadcast(intent)
+
+    fun getScanner():BluetoothLeScanner?{
+        return bluetoothAdapter?.bluetoothLeScanner
     }
 
 
 
 
-    inner class LocalBinder : Binder() {
-        val service: BluetoothService
-            get() = this@BluetoothService
-    }
 
-    override fun onBind(intent: Intent): IBinder? {
-        return mBinder
-    }
-
-    override fun onUnbind(intent: Intent): Boolean {
-        // After using a given device, you should make sure that BluetoothGatt.close() is called
-        // such that resources are cleaned up properly.  In this particular example, close() is
-        // invoked when the UI is disconnected from the Service.
-        close()
-        return super.onUnbind(intent)
-    }
 
     /**
      * Initializes a reference to the local Bluetooth adapter.
      *
      * @return Return true if the initialization is successful.
      */
-    fun initialize(): Boolean {
+    fun initialize(ctx:Context, listener:IBluetoothMgr): Boolean {
         // For API level 18 and above, get a reference to BluetoothAdapter through
         // BluetoothManager.
+        this.ctx=ctx
+        this.listener=listener
         if (bluetoothManager == null) {
-            bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+            bluetoothManager = this.ctx.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
             if (bluetoothManager == null) {
                 Log.e(TAG, "Unable to initialize BluetoothManager.")
                 return false
@@ -288,7 +276,7 @@ class BluetoothService : Service() {
         }
         // We want to directly connect to the device, so we are setting the autoConnect
         // parameter to false.
-        mBluetoothGatt = device.connectGatt(this, false, mGattCallback, TRANSPORT_LE)
+        mBluetoothGatt = device.connectGatt(ctx, false, mGattCallback, TRANSPORT_LE)
         Log.d(TAG, "Trying to create a new connection. ${device.address}")
         bluetoothDeviceAddress = address
         connectionState = STATE_CONNECTING
@@ -509,7 +497,7 @@ class BluetoothService : Service() {
 
 
     companion object {
-        private val TAG = BluetoothService::class.java.simpleName
+        private val TAG = BluetoothMgr::class.java.simpleName
 
         private val STATE_DISCONNECTED = 0
         private val STATE_CONNECTING = 1

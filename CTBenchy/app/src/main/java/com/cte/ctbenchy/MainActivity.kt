@@ -16,6 +16,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.app.ActivityCompat
 import com.cte.bluetooth.BluetoothHandler
 import com.cte.bluetooth.BluetoothViewModel
+import com.cte.ctbenchy.ui.BenchyScreen
+import com.cte.ctbenchy.ui.BenchyViewModel
 import com.cte.ctbenchy.ui.theme.CTBenchyTheme
 
 
@@ -36,8 +38,9 @@ class MainActivity : ComponentActivity() {
                 android.Manifest.permission.READ_EXTERNAL_STORAGE
             ), 0
         )
+        val benchyViewModel = BenchyViewModel()
         benchyHwCtl = BenchyHwCtl()
-        benchyHwCtl.initialize(this,bluetoothViewModel)
+        benchyHwCtl.initialize(this,benchyViewModel)
 
 
 
@@ -48,7 +51,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                     Greeting("Android")
+                     BenchyScreen(benchyViewModel = benchyViewModel)
                 }
             }
         }

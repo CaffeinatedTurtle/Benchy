@@ -1,119 +1,32 @@
 package com.cte.ctbenchy
 
-import android.Manifest
 import android.app.Activity
-import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothManager
-import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
-import android.content.ServiceConnection
-import android.content.pm.PackageManager
-import android.os.IBinder
 import android.util.Log
-import androidx.core.app.ActivityCompat
 import com.cte.bluetooth.BluetoothHandler
-import com.cte.bluetooth.BluetoothService
 import com.cte.bluetooth.BluetoothViewModel
-import com.cte.bluetooth.IBluetoothListener
+import com.cte.bluetooth.IBluetoothMgr
+import com.cte.ctbenchy.ui.BenchyViewModel
+import java.nio.ByteBuffer
 import java.util.UUID
 
-class BenchyHwCtl() : IBluetoothListener {
+class BenchyHwCtl() : IBluetoothMgr {
     private final val TAG = "BenchyHwCtl"
-    private var bluetoothAdapter: BluetoothAdapter? = null
     private var bluetoothHandler: BluetoothHandler? = null
-    private lateinit var context: Activity
+     private lateinit var context: Activity
     private lateinit var model: BluetoothViewModel
-    private var bluetoothService: BluetoothService? = null
-
-    // Code to manage Service lifecycle.
-    private val serviceConnection = object : ServiceConnection {
-
-        override fun onServiceConnected(componentName: ComponentName, service: IBinder) {
-            Log.i(TAG, "service connected")
-            bluetoothService = (service as BluetoothService.LocalBinder).service
-             bluetoothHandler?.let{
-                it.bluetoothService = bluetoothService
-            }
-            bluetoothService?.let{
-                if (!it.initialize()) {
-                    Log.e(TAG, "Unable to initialize Bluetooth")
-                    context.finish()
-                }
-            }
-
-        }
-
-        override fun onServiceDisconnected(componentName: ComponentName) {
-            Log.i(TAG, "disconnected");
-            bluetoothService = null
-        }
-    }
-
-    fun initialize(ctx: MainActivity, viewModel: BluetoothViewModel) {
-        val bluetoothManager = ctx.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-        bluetoothAdapter = bluetoothManager.adapter
-
-        bluetoothAdapter?.let {
-            bluetoothHandler =
-                BluetoothHandler(viewModel, it)
-        }
-
-        val gattServiceIntent = Intent(ctx, BluetoothService::class.java)
-        ctx.bindService(gattServiceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
-        bluetoothHandler?.let{
-            ctx.registerReceiver(
-                it.gattUpdateReceiver,
-                it.makeGattUpdateIntentFilter()
-            )
-        }
+    private lateinit var benchyViewModel:BenchyViewModel
 
 
 
-        bluetoothHandler?.listener = this;
-        bluetoothHandler?.scanLeDevice(true)
+    fun initialize(ctx: MainActivity,  benchy:BenchyViewModel) {
+        // initialize the bluetooth handler and search for a device that
+        // exposes the service UUID
+        Log.i(TAG,"BATMAN INITIALIZE handler")
+        this.bluetoothHandler = BluetoothHandler(ctx, this, SERVICE_UUID)
+        this.benchyViewModel = benchy
+        bluetoothHandler?.scan()
 
-        viewModel.deviceList!!.observe(ctx, androidx.lifecycle.Observer {
-
-            if (ActivityCompat.checkSelfPermission(
-                    ctx,
-                    Manifest.permission.BLUETOOTH_CONNECT
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                Log.i(TAG, "NO bluetooth granted")
-            }
-            var found = false;
-            for (device in it) {
-
-                Log.i(TAG, "device ${device.device.name}  ${device.scanRecord}")
-                device.scanRecord?.serviceUuids?.let { services ->
-                    Log.i(TAG, "service data found ${services}")
-                    for (uuid in services) {
-                        Log.i(TAG, " uuid ${uuid.toString()}")
-                        if (uuid.uuid == SERVICE_UUID) {
-                            Log.i(TAG, "Found Benchy")
-                            viewModel?.selectDevice(device)
-                            bluetoothHandler?.stopScan()
-
-                            bluetoothHandler?.connect()
-
-                            found = true
-                            break
-                        }
-                    }
-                }
-                if (found) break
-            }
-
-
-        })
-        viewModel.services!!.observe(ctx, androidx.lifecycle.Observer {
-            Log.i(TAG, "found services")
-            for (service in it) {
-                Log.i(TAG, "is Benchy " + service.uuid.toString())
-                Log.i(TAG, "service uuid " + service.uuid)
-            }
-        })
 
     }
 
@@ -128,35 +41,65 @@ class BenchyHwCtl() : IBluetoothListener {
 
     override fun onConnect() {
         Log.i(TAG, "Benchy connect")
+        Log.i(TAG," read characteristics and load initial model")
+        bluetoothHandler?.let{ handler->
+            handler.readCharacteristic(RUDDER_CHARACTERISTIC_UUID)
+            handler.readCharacteristic(THROTTLE_CHARACTERISTIC_UUID)
+            handler.readCharacteristic(MODE_CHARACTERISTIC_UUID)
+            handler.readCharacteristic(LED_CHARACTERISTIC_UUID)
+        }
+
     }
 
     override fun onDisconnect() {
         Log.i(TAG, "Benchy disconnect")
     }
 
-    fun onResume(ctx:Context) {
-        bluetoothHandler?.let { handler ->
-            ctx.registerReceiver(
-                handler.gattUpdateReceiver,
-                handler.makeGattUpdateIntentFilter()
-            )
+    override fun onServicesDiscovered() {
+        TODO("Not yet implemented")
+    }
+
+    override fun onDataRecieved(uuid: UUID, value: ByteArray) {
+        Log.i(TAG,"BATMAN receive a value for ${uuid.toString()}")
+        val buffer = ByteBuffer.wrap(value)
+        when(uuid){
+            RUDDER_CHARACTERISTIC_UUID -> {
+                 val rudder = buffer.getShort(0)
+                benchyViewModel.uiState.value.rudder = rudder.toInt()
+                Log.i(TAG,"BATMAN recieve rudder andgle ${rudder} ${Utility.ByteArraytoHex(value,"%02x")}")
+
+            }
+            THROTTLE_CHARACTERISTIC_UUID -> {
+                val throttle = buffer.getShort(0)
+                benchyViewModel.uiState.value.throttle = throttle.toInt()
+                Log.i(TAG,"BATMAN set trottle ${Utility.ByteArraytoHex(value,"%02x")}")
+            }
+            MODE_CHARACTERISTIC_UUID -> {
+                val mode = value[0]
+                benchyViewModel.uiState.value.mode = mode
+                Log.i(TAG,"BATMAN set mode ${Utility.ByteArraytoHex(value,"%02x")}")
+            }
+            LED_CHARACTERISTIC_UUID -> {
+                val led = value[0]
+                benchyViewModel.uiState.value.ledMask=led
+                Log.i(TAG,"BATMAN set led ${Utility.ByteArraytoHex(value,"%02x")}")
+            }
         }
+    }
+
+    fun onResume(ctx:Context) {
+
 
     }
 
     fun onPause(ctx:Context) {
-        bluetoothHandler?.let { handler ->
-            ctx.unregisterReceiver(handler.gattUpdateReceiver)
 
-        }
     }
 
         fun onDestroy(ctx:Context) {
-            bluetoothService?.let {
-                ctx.unbindService(serviceConnection)
-            }
-            bluetoothService = null
+           bluetoothHandler?.disconnect()
         }
 
 
 }
+

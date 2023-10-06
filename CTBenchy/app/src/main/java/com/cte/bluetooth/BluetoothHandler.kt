@@ -266,13 +266,13 @@ class BluetoothHandler(
 
         }
 
-   fun writeCharacteristic(uuid : UUID) {
+   fun writeCharacteristic(uuid : UUID,value: ByteArray) {
             bluetoothMgr?.let {mgr->
                 if (mgr.isConnected()) {
                     val characteristic = mgr.getCharacteristic(uuid)
                     characteristic?.let {
-                        if (isCharacteristicWritable(characteristic)) {
-                            mgr?.postWriteCharacteristic(characteristic)
+                         if (isCharacteristicWritable(characteristic)) {
+                            mgr?.postWriteCharacteristic(characteristic,value)
                         } else {
                             Log.e(TAG, "characteristic not writable")
                         }

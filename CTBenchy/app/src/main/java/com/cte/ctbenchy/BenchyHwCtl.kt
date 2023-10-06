@@ -9,13 +9,15 @@ import com.cte.bluetooth.IBluetoothMgr
 import com.cte.ctbenchy.ui.BenchyViewModel
 import java.nio.ByteBuffer
 import java.util.UUID
+import kotlin.experimental.and
+import kotlin.experimental.xor
 
 class BenchyHwCtl() : IBluetoothMgr {
     private final val TAG = "BenchyHwCtl"
     private var bluetoothHandler: BluetoothHandler? = null
      private lateinit var context: Activity
     private lateinit var model: BluetoothViewModel
-    private lateinit var benchyViewModel:BenchyViewModel
+    lateinit var benchyViewModel:BenchyViewModel
 
 
 
@@ -81,8 +83,13 @@ class BenchyHwCtl() : IBluetoothMgr {
             }
             LED_CHARACTERISTIC_UUID -> {
                 val led = value[0]
-                benchyViewModel.uiState.value.ledMask=led
-                Log.i(TAG,"BATMAN set led ${Utility.ByteArraytoHex(value,"%02x")}")
+                benchyViewModel.setLedMask(led)
+
+                val red =   benchyViewModel.uiState.value.ledMask and 2
+                val white = benchyViewModel.uiState.value.ledMask and 4
+                val green = benchyViewModel.uiState.value.ledMask and 1
+
+                Log.i(TAG,"BATMAN set led ${Utility.ByteArraytoHex(value,"%02x")} red:${red} white: ${white} green:${green}")
             }
         }
     }
@@ -99,6 +106,13 @@ class BenchyHwCtl() : IBluetoothMgr {
         fun onDestroy(ctx:Context) {
            bluetoothHandler?.disconnect()
         }
+
+    fun toggleRedLed(){
+        var ledMask = benchyViewModel.uiState.value.ledMask
+        ledMask= ledMask xor 2
+        bluetoothHandler?.writeCharacteristic(LED_CHARACTERISTIC_UUID,ledMask)
+    }
+
 
 
 }

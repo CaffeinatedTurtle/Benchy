@@ -8,8 +8,10 @@ import android.bluetooth.le.BluetoothLeScanner
 import android.content.Context
 import android.content.Intent
 import android.os.Binder
+import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import androidx.annotation.RequiresApi
 import kotlinx.coroutines.*
 import java.lang.reflect.InvocationTargetException
 import java.util.*
@@ -339,13 +341,14 @@ class BluetoothMgr {
      *
      * @param characteristic The characteristic to READ from.
      */
-   private fun writeCharacteristic(characteristic: BluetoothGattCharacteristic) {
+   @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+   private fun writeCharacteristic(characteristic: BluetoothGattCharacteristic, value:ByteArray) {
         if (bluetoothAdapter == null || mBluetoothGatt == null) {
             Log.w(TAG, "BluetoothAdapter not initialized")
             return
         }
         Log.i(TAG, "WRITE req characteristic " + characteristic.uuid.toString())
-        mBluetoothGatt!!.writeCharacteristic(characteristic)
+        mBluetoothGatt?.writeCharacteristic(characteristic,value,BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
     }
 
 
@@ -379,20 +382,20 @@ class BluetoothMgr {
     }
 
 
-    fun postWriteCharacteristic(characteristic: BluetoothGattCharacteristic){
+    fun postWriteCharacteristic(characteristic: BluetoothGattCharacteristic,value:ByteArray){
         Log.i(TAG, "post write " + characteristic.uuid)
-        rqueue.offer(BTrequest(BTRequestType.WRITE, characteristic, false))
+        rqueue.offer(BTrequest(BTRequestType.WRITE, characteristic,value, false))
         execute()
     }
 
     fun postReadCharacteristic(characteristic: BluetoothGattCharacteristic){
         Log.i(TAG, "post read " + characteristic.uuid)
-        rqueue.offer(BTrequest(BTRequestType.READ, characteristic, false))
+        rqueue.offer(BTrequest(BTRequestType.READ, characteristic, null,false))
         execute()
     }
     fun postNotifyCharacteristic(characteristic: BluetoothGattCharacteristic, enable: Boolean){
         Log.i(TAG, "post notify " + characteristic.uuid)
-        rqueue.offer(BTrequest(BTRequestType.NOTIFY, characteristic, enable))
+        rqueue.offer(BTrequest(BTRequestType.NOTIFY, characteristic,null, enable))
         execute()
     }
 
@@ -487,11 +490,13 @@ class BluetoothMgr {
     inner class BTrequest(
         type: BTRequestType,
         characteristic: BluetoothGattCharacteristic,
+        newValue:ByteArray?,
         enable: Boolean
     ){
         val type = type
         val characteristic = characteristic
         val enable = enable
+        val newValue = newValue
     }
 
 

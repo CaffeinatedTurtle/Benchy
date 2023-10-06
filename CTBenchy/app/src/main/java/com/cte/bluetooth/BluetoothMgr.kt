@@ -97,6 +97,7 @@ class BluetoothMgr {
             execute()
         }
 
+        @RequiresApi(Build.VERSION_CODES.TIRAMISU)
         override fun onCharacteristicRead(
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic,
@@ -417,6 +418,7 @@ class BluetoothMgr {
      * Get the next queued request, if any, and perform the requested
      * operation
      */
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     operator fun next() {
         var request: BTrequest? = null
         synchronized(this) {
@@ -425,14 +427,22 @@ class BluetoothMgr {
                 isQueueRunning = false
                 return
             }
-
-        if (request!!.type == BTRequestType.READ) {
-            readCharacteristic(request!!.characteristic)
-        } else if (request!!.type == BTRequestType.WRITE) {
-            writeCharacteristic(request!!.characteristic)
-        } else if (request!!.type == BTRequestType.NOTIFY){
-            setCharacteristicNotification(request!!.characteristic, request!!.enable)
+        request?.let{ req->
+            when (req.type) {
+                BTRequestType.READ -> {
+                    readCharacteristic(req.characteristic)
+                }
+                BTRequestType.WRITE -> {
+                    req.newValue?.let {
+                        writeCharacteristic(req.characteristic, req.newValue,)
+                    }
+                }
+                BTRequestType.NOTIFY -> {
+                    setCharacteristicNotification(request!!.characteristic, request!!.enable)
+                }
+            }
         }
+
         }
     }
 

@@ -70,7 +70,9 @@ benchyHwCtl: BenchyHwCtl
             modifier = Modifier.padding(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            OutlinedButton(onClick = { /* Do something! */ }
+            OutlinedButton(onClick = {
+                Log.i("BATMAN "," press Red LED");
+                benchyHwCtl.toggleRedLed() }
             , colors = ButtonDefaults.textButtonColors(
                     containerColor = portLightColor
                 )) {

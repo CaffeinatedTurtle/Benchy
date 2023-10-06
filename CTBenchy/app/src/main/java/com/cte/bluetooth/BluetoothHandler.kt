@@ -318,7 +318,7 @@ fun writeChangedCharacteristics() {
                     } else {
                         changed.key.value = changed.value.toString().toByteArray()
                     }
-                    mgr.postWriteCharacteristic(changed.key)
+                    mgr.postWriteCharacteristic(changed.key,changed.value)
                 }
                 updatedCharacteristics.clear()
             }

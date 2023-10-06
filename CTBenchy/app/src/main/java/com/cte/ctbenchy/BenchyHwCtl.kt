@@ -110,7 +110,15 @@ class BenchyHwCtl() : IBluetoothMgr {
     fun toggleRedLed(){
         var ledMask = benchyViewModel.uiState.value.ledMask
         ledMask= ledMask xor 2
-        bluetoothHandler?.writeCharacteristic(LED_CHARACTERISTIC_UUID,ledMask)
+        val bytes = ByteArray(1)
+        bytes[0] = ledMask
+        bluetoothHandler?.writeCharacteristic(LED_CHARACTERISTIC_UUID,bytes)
+    }
+
+    fun setLedMask(ledMask:Byte){
+        val bytes = ByteArray(1)
+        bytes[0] = ledMask
+        bluetoothHandler?.writeCharacteristic(LED_CHARACTERISTIC_UUID,bytes)
     }
 
 

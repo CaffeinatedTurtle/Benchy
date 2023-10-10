@@ -15,4 +15,21 @@ class BenchyViewModel : ViewModel() {
          currentState.copy(ledMask = mask)
      }
  }
+    fun setMode(mode:Byte){
+        _uiState.update { currentState ->
+            currentState.copy(mode = mode)
+        }
+    }
+
+    fun setThrottle(throttle:Short){
+        _uiState.update { currentState ->
+            currentState.copy(throttle = throttle.toInt())
+        }
+    }
+
+    fun setRudder(rudder:Short){
+        _uiState.update { currentState ->
+            currentState.copy(rudder = rudder.toInt())
+        }
+    }
 }

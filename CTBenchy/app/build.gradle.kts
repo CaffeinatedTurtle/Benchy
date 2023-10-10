@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId = "com.cte.ctbenchy"
-        minSdk = 30
+        minSdk = 33
         targetSdk = 33
         versionCode = 1
         versionName = "1.0"

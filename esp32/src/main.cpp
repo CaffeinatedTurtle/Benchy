@@ -10,7 +10,7 @@
 
 Preferences preferences;
 
-#define MAX_THROTTLE 100
+#define MAX_THROTTLE 180
 #define MIN_THROTTLE 0
 
 #define MAX_RUDDER 120
@@ -23,7 +23,7 @@ Preferences preferences;
 #define RUDDER_PIN 13
 #define THROTTLE_PIN 12
 
-#define LED_GREEN_PIN  GPIO_NUM_5
+#define LED_GREEN_PIN GPIO_NUM_5
 #define LED_RED_PIN GPIO_NUM_21
 #define LED_WHITE_PIN GPIO_NUM_19
 
@@ -31,12 +31,8 @@ Preferences preferences;
 #define LED_RED 2
 #define LED_WHITE 4
 
-
 int rudderPin = RUDDER_PIN;
 int throttlePin = THROTTLE_PIN;
-
-
-
 
 boolean connected = false;
 
@@ -51,79 +47,93 @@ Servo throttle;
 
 BLEServer *pServer;
 BLEService *pService;
-BLECharacteristic *pRudderCharacteristic;   // 0 -180 degrees
+BLEUUID ClientNotifyDescriptorUuid = BLEUUID((uint16_t)0x2902);
+BLECharacteristic *pRudderCharacteristic; // 0 -180 degrees
+BLEDescriptor rudderNotifyDescriptor = BLEDescriptor(ClientNotifyDescriptorUuid, 100);
 BLECharacteristic *pThrottleCharacteristic; //  0 - 100
-BLECharacteristic *pModeCharacteristic;     // 0= unidirectional, 1 = bidirectional 2 = programming mode
-BLECharacteristic *pLEDCharacteristic;   // flags for up to 8 leds
+BLEDescriptor throttleNotifyDescriptor = BLEDescriptor(ClientNotifyDescriptorUuid, 100);
+BLECharacteristic *pModeCharacteristic; // 0= unidirectional, 1 = bidirectional 2 = programming mode
+BLEDescriptor modeNotifyDescriptor = BLEDescriptor(ClientNotifyDescriptorUuid, 100);
+BLECharacteristic *pLEDCharacteristic; // flags for up to 8 leds
+BLEDescriptor LEDNotifyDescriptor = BLEDescriptor(ClientNotifyDescriptorUuid, 100);
 
 uint8_t ledFlags = 0;
-int rudderAngle;      // +/-  60
-int throttlePosition; // +/-  100
-int throttleServoPosition;   // 0 - 100
-int rudderServoPosition; // 0-180
+
+int throttlePosition;      // +/-  100
+int throttleServoPosition; // 0 - 180
+int rudderAngle;           // +/-  60
+int rudderServoPosition;   // 0-180
 uint8_t mode = 0;
+uint8_t led = 0;
+
+void updateRudderServo(int angle)
+{
+
+  rudderServoPosition = angle + (MAX_RUDDER / 2);
+  if (rudderServoPosition > MAX_RUDDER)
+    rudderServoPosition = MAX_RUDDER;
+  if (rudderServoPosition < MIN_RUDDER)
+    rudderServoPosition = MIN_RUDDER;
+
+  rudder.write(rudderServoPosition);
+  rudderAngle = rudderServoPosition - (MAX_RUDDER / 2);
+}
 
 void setRudderAngle(int angle)
 {
-  if (angle > MAX_RUDDER)
-    angle = MAX_RUDDER;
-  if (angle < MIN_RUDDER)
-    angle = MIN_RUDDER;
   pRudderCharacteristic->setValue(angle);
+  pRudderCharacteristic->indicate();
+
+  rudderAngle = angle;
+  updateRudderServo(angle);
 }
 
-uint8_t getRudderAngle()
+int32_t getRudderAngle()
 {
   uint8_t *dataPtr = pRudderCharacteristic->getData();
   size_t datalength = pRudderCharacteristic->getLength();
-  int rudder;
-  if (datalength < sizeof(rudder))
+  int32_t rudderInput;
+  if (datalength < sizeof(rudderInput))
+  {
     return rudderAngle;
-  memcpy(&rudder, dataPtr, sizeof(rudder));
-  if (rudder > MAX_RUDDER)
-  {
-    rudder = MAX_RUDDER;
-    pRudderCharacteristic->setValue(rudder);
   }
-  if (rudder < MIN_RUDDER)
-  {
-    rudder = MIN_RUDDER;
-    pRudderCharacteristic->setValue(rudder);
-  }
+  memcpy(&rudderInput, dataPtr, sizeof(rudderInput));
 
-  return rudder;
+  return rudderInput;
+}
+void updateThrottleControl(int value)
+{
+  int position = value;
+  if (mode == MODE_BI)
+  {
+    if (value < 0)
+    {
+      position = 90 - (value * -1);
+    }
+    else
+    {
+      position = value + 90; // bi direction 90 is mid point // -90 = full reverse(0) +90= full throttle(100)
+    }
+  }
+  if (position > MAX_THROTTLE)
+    position = MAX_THROTTLE;
+  if (position < MIN_THROTTLE)
+    position = MIN_THROTTLE;
+  throttle.write(position);
+  throttleServoPosition = position;
+  throttlePosition = value;
 }
 
 int setThrottle(int value)
 {
-  int position = value;
-  if (value > MAX_THROTTLE)
-    position= MAX_THROTTLE;
-  if (value < MIN_THROTTLE)
-    position = MIN_THROTTLE;
+  int32_t position = value;
 
-   pThrottleCharacteristic->setValue(position);
+  pThrottleCharacteristic->setValue(position);
+  pThrottleCharacteristic->indicate();
+  throttlePosition = position;
+  updateThrottleControl(position);
   return position;
 }
-
-void updateThrottleControl(int value){
-  int position=value;
-    if (mode = MODE_BI)
-  {
-    if (value < 0)
-    {
-      position = 50 - (value * -1);
-    }
-    else
-    {
-      position = value + 50; // bi direction 50 is mid point // -50 = full reverse(0) +50= full throttle(100)
-    }
-  }
-  throttle.write(position);
-  throttleServoPosition = position;
-}
-
-
 
 int getThrottle()
 {
@@ -132,18 +142,6 @@ int getThrottle()
   int position;
   memcpy(&position, dataPtr, sizeof(position));
 
-  if (position > MAX_THROTTLE)
-  {
-    position = MAX_THROTTLE;
-    pThrottleCharacteristic->setValue(position);
-  }
-
-  if (position < MIN_THROTTLE)
-  {
-    position = MIN_THROTTLE;
-    pThrottleCharacteristic->setValue(position);
-  }
-
   return position;
 }
 
@@ -151,6 +149,7 @@ void setMode(uint8_t newMode)
 {
   mode = newMode;
   pModeCharacteristic->setValue(&mode, 1);
+  pModeCharacteristic->indicate();
 }
 
 void saveMode()
@@ -172,37 +171,50 @@ uint8_t getLed()
   return *dataPtr;
 }
 
-void setLed (uint8_t led){
-  if (led & LED_RED){
-     gpio_set_level((gpio_num_t)LED_RED_PIN, 1);
-  } else {
-     gpio_set_level((gpio_num_t)LED_RED_PIN, 0);
+void setLed(uint8_t value)
+{
+  led = value;
+  if (led & LED_RED)
+  {
+    gpio_set_level((gpio_num_t)LED_RED_PIN, 1);
   }
-    if (led & LED_GREEN){
-     gpio_set_level((gpio_num_t)LED_GREEN_PIN, 1);
-  } else {
-     gpio_set_level((gpio_num_t)LED_GREEN_PIN, 0);
+  else
+  {
+    gpio_set_level((gpio_num_t)LED_RED_PIN, 0);
   }
-      if (led & LED_WHITE){
-     gpio_set_level((gpio_num_t)LED_WHITE_PIN, 1);
-  } else {
-     gpio_set_level((gpio_num_t)LED_WHITE_PIN, 0);
+  if (led & LED_GREEN)
+  {
+    gpio_set_level((gpio_num_t)LED_GREEN_PIN, 1);
   }
+  else
+  {
+    gpio_set_level((gpio_num_t)LED_GREEN_PIN, 0);
+  }
+  if (led & LED_WHITE)
+  {
+    gpio_set_level((gpio_num_t)LED_WHITE_PIN, 1);
+  }
+  else
+  {
+    gpio_set_level((gpio_num_t)LED_WHITE_PIN, 0);
+  }
+  pLEDCharacteristic->setValue(&led, 1);
+  pLEDCharacteristic->indicate();
 }
 
 void loadPreferences()
 {
   mode = preferences.getUChar("mode", 0);
   Serial.printf("loaded preferences mode = %d\n", mode);
-  setMode(mode);
 }
 
-void initLed(){
-    gpio_pad_select_gpio(LED_RED);
+void initLed()
+{
+  gpio_pad_select_gpio(LED_RED);
   gpio_set_direction((gpio_num_t)LED_RED_PIN, GPIO_MODE_OUTPUT);
-    gpio_pad_select_gpio((gpio_num_t)LED_GREEN_PIN);
+  gpio_pad_select_gpio((gpio_num_t)LED_GREEN_PIN);
   gpio_set_direction((gpio_num_t)LED_GREEN_PIN, GPIO_MODE_OUTPUT);
-    gpio_pad_select_gpio(LED_WHITE_PIN);
+  gpio_pad_select_gpio(LED_WHITE_PIN);
   gpio_set_direction((gpio_num_t)LED_WHITE_PIN, GPIO_MODE_OUTPUT);
 }
 
@@ -214,38 +226,62 @@ void setup()
   Serial.begin(115200);
   Serial.println("Starting BLE Server!");
 
+  BLEDescriptor ClientNotifyDescriptor = BLEDescriptor(ClientNotifyDescriptorUuid, 100);
   BLEDevice::init("CTBenchy");
   pServer = BLEDevice::createServer();
   pService = pServer->createService(SERVICE_UUID);
   pRudderCharacteristic = pService->createCharacteristic(
       RUDDER_CHARACTERISTIC_UUID,
       BLECharacteristic::PROPERTY_READ |
-          BLECharacteristic::PROPERTY_WRITE);
+          BLECharacteristic::PROPERTY_WRITE |
+          BLECharacteristic::PROPERTY_NOTIFY |
+          BLECharacteristic::PROPERTY_INDICATE);
+  pRudderCharacteristic->addDescriptor(&rudderNotifyDescriptor);
   pThrottleCharacteristic = pService->createCharacteristic(
       THROTTLE_CHARACTERISTIC_UUID,
       BLECharacteristic::PROPERTY_READ |
-          BLECharacteristic::PROPERTY_WRITE);
+          BLECharacteristic::PROPERTY_WRITE |
+          BLECharacteristic::PROPERTY_NOTIFY|
+          BLECharacteristic::PROPERTY_INDICATE);
+  pThrottleCharacteristic->addDescriptor(&throttleNotifyDescriptor);
   pModeCharacteristic = pService->createCharacteristic(
       MODE_CHARACTERISTIC_UUID,
       BLECharacteristic::PROPERTY_READ |
-          BLECharacteristic::PROPERTY_WRITE);
-   pLEDCharacteristic = pService->createCharacteristic(
+          BLECharacteristic::PROPERTY_WRITE |
+          BLECharacteristic::PROPERTY_NOTIFY|
+          BLECharacteristic::PROPERTY_INDICATE);
+  pModeCharacteristic->addDescriptor(&modeNotifyDescriptor);
+  pLEDCharacteristic = pService->createCharacteristic(
       LED_CHARACTERISTIC_UUID,
       BLECharacteristic::PROPERTY_READ |
-          BLECharacteristic::PROPERTY_WRITE);
+          BLECharacteristic::PROPERTY_WRITE |
+          BLECharacteristic::PROPERTY_NOTIFY|
+          BLECharacteristic::PROPERTY_INDICATE);
+  pLEDCharacteristic->addDescriptor(&LEDNotifyDescriptor);
 
+  pService->start();
+  BLEDevice::setPower(ESP_PWR_LVL_P9, ESP_BLE_PWR_TYPE_DEFAULT);
+  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID(SERVICE_UUID);
+  pAdvertising->setScanResponse(true);
+  pAdvertising->setMinPreferred(0x06); // functions that help with iPhone connections issue
+  pAdvertising->setMinPreferred(0x12);
 
+  BLEDevice::startAdvertising();
 
   loadPreferences();
-  setRudderAngle(0);
-
 
   initLed();
-  setLed(0);
+
   // bidirectional set throttle at midpoint when starting
   // program mode set throttle at max when starting
   // unidirectional mode set throttle a 0 when starting
 
+  rudder.attach(rudderPin);
+  throttle.attach(throttlePin,Servo::CHANNEL_NOT_ATTACHED, 0, 180,1000,2000);
+
+  setMode(mode);
+  setRudderAngle(0);
   switch (mode)
   {
   case MODE_UNI:
@@ -255,56 +291,81 @@ void setup()
     setThrottle(0);
     break;
   case MODE_PROGRAM:
-    setThrottle(100);
+    setThrottle(180);
     break;
   default:
     setThrottle(0);
   }
+  setLed(0);
 
-  rudder.attach(rudderPin);
-  throttle.attach(throttlePin, Servo::CHANNEL_NOT_ATTACHED, 0, 100, 544, 2400);
-
-  pService->start();
-  BLEDevice::setPower(ESP_PWR_LVL_P9,ESP_BLE_PWR_TYPE_DEFAULT);
-  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-  pAdvertising->addServiceUUID(SERVICE_UUID);
-  pAdvertising->setScanResponse(true);
-  pAdvertising->setMinPreferred(0x06); // functions that help with iPhone connections issue
-  pAdvertising->setMinPreferred(0x12);
- 
-  BLEDevice::startAdvertising();
-  // pAdvertising->start();
   Serial.println("Characteristic defined! Now you can read it in the Client!");
 }
 
-void updateMode(){
+void updateMode()
+{
   uint8_t newMode = getMode();
-  if (newMode != mode){
+  if (newMode != mode)
+  {
     mode = newMode;
     saveMode();
-
+    setMode(newMode);
   }
 }
-
+int initCount = 0;
 void loop()
 {
   updateMode();
-  throttlePosition = getThrottle();
-  rudderAngle = getRudderAngle();
-  rudder.write(rudderAngle + (MAX_RUDDER / 2));
-  uint8_t led = getLed();
-  setLed(led);
+  int newThrottlePosition = getThrottle();
+  if (newThrottlePosition != throttlePosition)
+  {
+    setThrottle(newThrottlePosition);
+  }
+
+  int newRudderAngle = getRudderAngle();
+  if (newRudderAngle != rudderAngle)
+  {
+    setRudderAngle(newRudderAngle);
+  }
+
+  uint8_t newled = getLed();
+  if (newled != led)
+  {
+    setLed(newled);
+  }
+
   long t1 = millis();
   if (t1 % 500 == 0)
   { // print a debug every 1/2 second
-    if (pServer->getConnectedCount() <= 0 && connected){
+    if (pServer->getConnectedCount() <= 0 && connected)
+    {
       connected = false;
-      setThrottle(0);
+      if (throttlePosition != 0)
+        setThrottle(0);
       pServer->startAdvertising();
-     
-    } else {
-      connected=true;
     }
-    Serial.printf("rudder angle %03d throttle position %03d duty cycle %03d rudder %d  ledRed: %1x ledWhite %1x ledGreen %1xmode:%d  connected%d\r", rudderAngle, throttlePosition, throttleServoPosition, rudderAngle,led&LED_RED,led&LED_WHITE , led&LED_GREEN, mode, pServer->getConnectedCount());
+    else if (pServer->getConnectedCount() == 0){
+      connected = false;
+    }
+    else
+    {
+      connected = true;
+    }
+    if (connected)
+    {
+      if (initCount < 5 && initCount >= 0)
+      {
+        setLed(0x7);
+        initCount++;
+      }
+      else
+      {
+        if (initCount >= 5)
+        {
+          initCount = -1;
+          setLed(0x0);
+        }
+      }
+    }
+    Serial.printf("rudder angle %d rudderServo %d throttle position %d throttle servo %03d  ledRed: %1x ledWhite %1x ledGreen %1xmode:%d  connected%d\r", rudderAngle, rudderServoPosition, throttlePosition, throttleServoPosition, led & LED_RED, led & LED_WHITE, led & LED_GREEN, mode, pServer->getConnectedCount());
   }
 }

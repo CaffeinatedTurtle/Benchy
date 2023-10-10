@@ -246,6 +246,9 @@ class BluetoothHandler(
                 if (isCharacteristicNotifiable(char)) {
                     notifyCharacteristic(char.uuid, true)
                 }
+                if (isCharacteristicNotifiable(char)) {
+                    notifyCharacteristic(char.uuid, true)
+                }
             }
         }
 
@@ -290,8 +293,11 @@ class BluetoothHandler(
                 if (mgr.isConnected()) {
                     val characteristic = mgr.getCharacteristic(uuid)
                     characteristic?.let {
-                        if (isCharacteristicNotifiable(characteristic)) {
-                            mgr?.postNotifyCharacteristic(characteristic, enable)
+                        if (isCharacteristicIndicate(it)){
+                            mgr.postNotifyCharacteristic(it,enable)
+                        }
+                        if (isCharacteristicNotifiable(it)) {
+                            mgr?.postNotifyCharacteristic(it, enable)
                         } else {
                             Log.e(TAG, "characteristic not notifiable")
                         }
@@ -356,9 +362,16 @@ fun writeChangedCharacteristics() {
         /**
          * @return Returns **true** if property is supports notification
          */
-        fun isCharacteristicNotifiable(chararacteristic: BluetoothGattCharacteristic): Boolean {
+        private fun isCharacteristicNotifiable(chararacteristic: BluetoothGattCharacteristic): Boolean {
             return chararacteristic.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0
         }
+    fun isCharacteristicIndicate(chararacteristic: BluetoothGattCharacteristic): Boolean {
+        return chararacteristic.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0
+    }
+
+    fun currentQueueSize():Int{
+        return bluetoothMgr?.getQueueSize()?:-1
+    }
 
     override fun onConnect() {
         isConnected = true

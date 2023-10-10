@@ -8,16 +8,20 @@ import com.cte.bluetooth.BluetoothViewModel
 import com.cte.bluetooth.IBluetoothMgr
 import com.cte.ctbenchy.ui.BenchyViewModel
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.experimental.and
 import kotlin.experimental.xor
 
 class BenchyHwCtl() : IBluetoothMgr {
     private final val TAG = "BenchyHwCtl"
     private var bluetoothHandler: BluetoothHandler? = null
-     private lateinit var context: Activity
+    private lateinit var context: Activity
     private lateinit var model: BluetoothViewModel
     lateinit var benchyViewModel:BenchyViewModel
+    private val rudderQueued:AtomicBoolean = AtomicBoolean(false)
+    private val throttleQueued:AtomicBoolean = AtomicBoolean(false)
 
 
 
@@ -31,6 +35,61 @@ class BenchyHwCtl() : IBluetoothMgr {
 
 
     }
+    fun toggleLed(led:Byte){
+        var ledMask = benchyViewModel.uiState.value.ledMask
+        ledMask= ledMask xor led
+        val bytes = ByteArray(1)
+        bytes[0] = ledMask
+        bluetoothHandler?.writeCharacteristic(LED_CHARACTERISTIC_UUID,bytes)
+        //bluetoothHandler?.readCharacteristic(LED_CHARACTERISTIC_UUID)
+    }
+
+    fun setLedMask(ledMask:Byte){
+        val bytes = ByteArray(1)
+        bytes[0] = ledMask
+        bluetoothHandler?.writeCharacteristic(LED_CHARACTERISTIC_UUID,bytes)
+        // bluetoothHandler?.readCharacteristic(LED_CHARACTERISTIC_UUID)
+    }
+
+    fun setMode(mode:Int){
+        val bytes = ByteArray(1)
+        bytes[0] = mode.toByte()
+        bluetoothHandler?.writeCharacteristic(MODE_CHARACTERISTIC_UUID,bytes)
+        //bluetoothHandler?.readCharacteristic(MODE_CHARACTERISTIC_UUID)
+    }
+    fun setThrottle(throttle:Int){
+        if (bluetoothHandler?.currentQueueSize()?:-1 <5){
+            throttleQueued.set(false)
+        }
+        if (throttleQueued.compareAndSet(false,true)) {
+            val bytes = ByteArray(Int.SIZE_BYTES)
+            val byteBuffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+            byteBuffer.putInt(throttle)
+            // add atomic mutex to only allow one throttle command at a time otherwise
+            // they all queue up and that's creates lag. the slider move much faster than
+            // the bluetooth can keep up
+
+            bluetoothHandler?.writeCharacteristic(THROTTLE_CHARACTERISTIC_UUID, bytes)
+        }
+
+    }
+    fun setRudder(rudder:Float){
+        Log.i(TAG,"lock ${rudderQueued.get()} queuesize ${bluetoothHandler?.currentQueueSize()?:-1}")
+        if (bluetoothHandler?.currentQueueSize()?:-1 <5){
+            rudderQueued.set(false)
+        }
+        if (rudderQueued.compareAndSet(false,true)) {
+            val bytes = ByteArray(Int.SIZE_BYTES)
+            val byteBuffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+            byteBuffer.putInt(rudder.toInt())
+            Log.i(TAG, "BATMAN write rudder angle ${rudder.toInt()}")
+            bluetoothHandler?.writeCharacteristic(RUDDER_CHARACTERISTIC_UUID, bytes)
+        }
+
+    }
+
+
+
 
     companion object {
         val SERVICE_UUID = UUID.fromString("7507cee3-db32-4e5a-bd6b-96b62887129e")
@@ -38,12 +97,19 @@ class BenchyHwCtl() : IBluetoothMgr {
         val THROTTLE_CHARACTERISTIC_UUID = UUID.fromString("87607759-37d1-41b5-b2c8-c44b7c746083")
         val MODE_CHARACTERISTIC_UUID = UUID.fromString("16d68508-2fd4-40a9-ba61-aac41cb81e45")
         val LED_CHARACTERISTIC_UUID = UUID.fromString("3a84a192-d522-46ef-b7c8-36b9fc062490")
+        val PORT_LED =2.toByte()
+        val STBD_LED = 1.toByte()
+        val STERN_LED = 4.toByte()
+        val MODE_UNI = 0.toByte()
+        val MODE_BI = 1.toByte()
+        val MODE_PROG = 2.toByte()
     }
 
 
     override fun onConnect() {
         Log.i(TAG, "Benchy connect")
         Log.i(TAG," read characteristics and load initial model")
+        bluetoothHandler?.enableNotifyAll()
         bluetoothHandler?.let{ handler->
             handler.readCharacteristic(RUDDER_CHARACTERISTIC_UUID)
             handler.readCharacteristic(THROTTLE_CHARACTERISTIC_UUID)
@@ -62,34 +128,52 @@ class BenchyHwCtl() : IBluetoothMgr {
     }
 
     override fun onDataRecieved(uuid: UUID, value: ByteArray) {
-        Log.i(TAG,"BATMAN receive a value for ${uuid.toString()}")
-        val buffer = ByteBuffer.wrap(value)
+        Log.i(TAG,"BATMAN receive a value for ${uuid.toString()} ${Utility.ByteArraytoHex(value,"%02x")}")
+        val buffer = ByteBuffer.wrap(value).order(ByteOrder.LITTLE_ENDIAN)
+        if (bluetoothHandler?.currentQueueSize()?:0 < 4){
+            rudderQueued.set(false)
+            throttleQueued.set(false)
+        }
         when(uuid){
             RUDDER_CHARACTERISTIC_UUID -> {
                  val rudder = buffer.getShort(0)
-                benchyViewModel.uiState.value.rudder = rudder.toInt()
-                Log.i(TAG,"BATMAN recieve rudder andgle ${rudder} ${Utility.ByteArraytoHex(value,"%02x")}")
+                benchyViewModel.setRudder(rudder)
+                rudderQueued.set(false)
+                Log.i(TAG,"BATMAN recieve rudder andgle ${rudder} hex: ${Utility.ByteArraytoHex(value,"%02x")}")
 
             }
             THROTTLE_CHARACTERISTIC_UUID -> {
                 val throttle = buffer.getShort(0)
-                benchyViewModel.uiState.value.throttle = throttle.toInt()
-                Log.i(TAG,"BATMAN set trottle ${Utility.ByteArraytoHex(value,"%02x")}")
+                benchyViewModel.setThrottle(throttle)
+                throttleQueued.set(false)
+                Log.i(TAG,"BATMAN set trottle ${throttle}  hex:${Utility.ByteArraytoHex(value,"%02x")}")
             }
             MODE_CHARACTERISTIC_UUID -> {
                 val mode = value[0]
-                benchyViewModel.uiState.value.mode = mode
+                benchyViewModel.setMode(mode)
                 Log.i(TAG,"BATMAN set mode ${Utility.ByteArraytoHex(value,"%02x")}")
             }
             LED_CHARACTERISTIC_UUID -> {
-                val led = value[0]
-                benchyViewModel.setLedMask(led)
+                if (value.isEmpty()){
+                    Log.i(TAG,"BATMAN no data LED")
+                } else {
+                    val led = value[0]
+                    benchyViewModel.setLedMask(led)
 
-                val red =   benchyViewModel.uiState.value.ledMask and 2
-                val white = benchyViewModel.uiState.value.ledMask and 4
-                val green = benchyViewModel.uiState.value.ledMask and 1
+                    val red = benchyViewModel.uiState.value.ledMask and 2
+                    val white = benchyViewModel.uiState.value.ledMask and 4
+                    val green = benchyViewModel.uiState.value.ledMask and 1
 
-                Log.i(TAG,"BATMAN set led ${Utility.ByteArraytoHex(value,"%02x")} red:${red} white: ${white} green:${green}")
+                    Log.i(
+                        TAG,
+                        "BATMAN set led ${
+                            Utility.ByteArraytoHex(
+                                value,
+                                "%02x"
+                            )
+                        } red:${red} white: ${white} green:${green}"
+                    )
+                }
             }
         }
     }
@@ -107,19 +191,6 @@ class BenchyHwCtl() : IBluetoothMgr {
            bluetoothHandler?.disconnect()
         }
 
-    fun toggleRedLed(){
-        var ledMask = benchyViewModel.uiState.value.ledMask
-        ledMask= ledMask xor 2
-        val bytes = ByteArray(1)
-        bytes[0] = ledMask
-        bluetoothHandler?.writeCharacteristic(LED_CHARACTERISTIC_UUID,bytes)
-    }
-
-    fun setLedMask(ledMask:Byte){
-        val bytes = ByteArray(1)
-        bytes[0] = ledMask
-        bluetoothHandler?.writeCharacteristic(LED_CHARACTERISTIC_UUID,bytes)
-    }
 
 
 

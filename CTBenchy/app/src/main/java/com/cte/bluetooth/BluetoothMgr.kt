@@ -115,6 +115,7 @@ class BluetoothMgr {
 
         }
 
+        @RequiresApi(Build.VERSION_CODES.TIRAMISU)
         override fun onCharacteristicWrite(
             gatt: BluetoothGatt?,
             characteristic: BluetoothGattCharacteristic?,
@@ -133,9 +134,10 @@ class BluetoothMgr {
         }
 
 
+        @RequiresApi(Build.VERSION_CODES.TIRAMISU)
         override fun onCharacteristicChanged (gatt:BluetoothGatt,
-       characteristic:   BluetoothGattCharacteristic,
-        value:ByteArray) {
+                                              characteristic:   BluetoothGattCharacteristic,
+                                              value:ByteArray) {
             Log.v(TAG, "characteristic changed " + characteristic.uuid.toString())
             listener.onDataRecieved(characteristic.uuid, value)
             next();
@@ -368,16 +370,31 @@ class BluetoothMgr {
             Log.w(TAG, "BluetoothAdapter not initialized")
             return
         }
-        mBluetoothGatt!!.setCharacteristicNotification(characteristic, enabled)
+        mBluetoothGatt?.setCharacteristicNotification(characteristic, enabled)
 
         // This is specific to enable notifications the characteristice
         if ( characteristic.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0) {
-            Log.i(TAG, "update descriptor")
+            Log.i(TAG,"BATMAN number of characteristics${characteristic.descriptors?.size}")
             val descriptor = characteristic.getDescriptor(
                 UUID.fromString(BluetoothAttributes.CLIENT_CHARACTERISTIC_CONFIG)
             )
-            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-            mBluetoothGatt!!.writeDescriptor(descriptor)
+            Log.i(TAG, "update descriptor $descriptor")
+            descriptor?.let{
+                mBluetoothGatt?.writeDescriptor(it,BluetoothGattDescriptor.ENABLE_INDICATION_VALUE)
+            }
+
+        }
+        // This is specific to enable notifications the characteristice
+        if ( characteristic.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0) {
+            Log.i(TAG,"BATMAN number of characteristics${characteristic.descriptors?.size}")
+            val descriptor = characteristic.getDescriptor(
+                UUID.fromString(BluetoothAttributes.CLIENT_CHARACTERISTIC_CONFIG)
+            )
+            Log.i(TAG, "update descriptor INDICATE $descriptor")
+            descriptor?.let{
+                mBluetoothGatt?.writeDescriptor(it,BluetoothGattDescriptor.ENABLE_INDICATION_VALUE)
+            }
+
         }
 
     }
@@ -398,6 +415,15 @@ class BluetoothMgr {
         Log.i(TAG, "post notify " + characteristic.uuid)
         rqueue.offer(BTrequest(BTRequestType.NOTIFY, characteristic,null, enable))
         execute()
+    }
+    fun postIndicateCharacteristic(characteristic: BluetoothGattCharacteristic, enable: Boolean){
+        Log.i(TAG, "post notify " + characteristic.uuid)
+        rqueue.offer(BTrequest(BTRequestType.INDICATE, characteristic,null, enable))
+        execute()
+    }
+
+    fun getQueueSize():Int{
+        return rqueue.size
     }
 
     fun execute() {
@@ -438,6 +464,9 @@ class BluetoothMgr {
                     }
                 }
                 BTRequestType.NOTIFY -> {
+                    setCharacteristicNotification(request!!.characteristic, request!!.enable)
+                }
+                BTRequestType.INDICATE -> {
                     setCharacteristicNotification(request!!.characteristic, request!!.enable)
                 }
             }
@@ -495,7 +524,7 @@ class BluetoothMgr {
 
 
     enum class BTRequestType{
-        NOTIFY,WRITE,READ
+        NOTIFY,WRITE,READ,INDICATE
     }
     inner class BTrequest(
         type: BTRequestType,
@@ -518,15 +547,6 @@ class BluetoothMgr {
         private val STATE_CONNECTING = 1
         private val STATE_CONNECTED = 2
 
-        val SPP_CONNECT_RETRY = 3
-
-        val ACTION_GATT_CONNECTED = "com.cte.bluetooth.ACTION_GATT_CONNECTED"
-        val ACTION_GATT_DISCONNECTED = "com.cte.bluetooth.ACTION_GATT_DISCONNECTED"
-        val ACTION_GATT_SERVICES_DISCOVERED =
-            "com.cte.bluetooth.le.ACTION_GATT_SERVICES_DISCOVERED"
-        val ACTION_DATA_AVAILABLE = "ccom.cte.bluetooth.ACTION_DATA_AVAILABLE"
-        val EXTRA_DATA = "com.cte.bluetooth.EXTRA_DATA"
-        val EXTRA_UUID = "ccom.cte.bluetooth.EXTRA_UUID"
 
 
 

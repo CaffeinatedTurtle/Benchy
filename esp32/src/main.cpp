@@ -13,7 +13,8 @@ Preferences preferences;
 #define MAX_THROTTLE 180
 #define MIN_THROTTLE 0
 
-#define MAX_RUDDER 120
+#define MAX_RUDDER 110
+#define RUDDER_OFFSET 7
 #define MIN_RUDDER 0
 
 #define MODE_UNI 0
@@ -69,14 +70,14 @@ uint8_t led = 0;
 void updateRudderServo(int angle)
 {
 
-  rudderServoPosition = angle + (MAX_RUDDER / 2);
+  rudderServoPosition = angle + RUDDER_OFFSET+ (MAX_RUDDER / 2);
   if (rudderServoPosition > MAX_RUDDER)
     rudderServoPosition = MAX_RUDDER;
   if (rudderServoPosition < MIN_RUDDER)
     rudderServoPosition = MIN_RUDDER;
 
   rudder.write(rudderServoPosition);
-  rudderAngle = rudderServoPosition - (MAX_RUDDER / 2);
+  rudderAngle = rudderServoPosition - (MAX_RUDDER / 2) - RUDDER_OFFSET;
 }
 
 void setRudderAngle(int angle)

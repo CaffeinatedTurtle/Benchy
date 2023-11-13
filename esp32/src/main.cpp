@@ -8,6 +8,8 @@
 #include <Preferences.h>
 #include "driver/gpio.h"
 
+#include "XT_DAC_Audio.h"
+
 Preferences preferences;
 
 #define MAX_THROTTLE 180

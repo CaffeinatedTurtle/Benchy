@@ -11,7 +11,7 @@
 
 #include "XT_DAC_Audio.h"
 #include "soundMotor.h"
-#include "soundHorn.h"
+#include "soundHorn1.h"
 
 
 Preferences preferences;
@@ -77,7 +77,7 @@ uint8_t led = 0;
 
 XT_Wav_Class MotorSound(motor_wav); 
 XT_Wav_Class HornSound(horn_wav); 
-XT_DAC_Audio_Class DacAudio(25,3);
+
 
 
 
@@ -325,6 +325,7 @@ void setup()
   setLed(0);
 
   Serial.println("Characteristic defined! Now you can read it in the Client!");
+
 }
 
 void updateMode()
@@ -367,9 +368,10 @@ void loop()
   }
 
 
-/*
+
   Serial.printf("play sound MotorSound.Playing %d\r",MotorSound.Playing);
   // play sound
+  static XT_DAC_Audio_Class DacAudio(25,3); // declare DacAudio object
   DacAudio.FillBuffer();                // Fill the sound buffer with data
   if(MotorSound.Playing==false)  {     // if not playing,
     DacAudio.Play(&MotorSound); 
@@ -378,7 +380,7 @@ void loop()
   if (newled && HornSound.Playing==false){
     DacAudio.Play(&HornSound);
   }
-  */
+ 
 
   long t1 = millis();
   if (t1 % 500 == 0)

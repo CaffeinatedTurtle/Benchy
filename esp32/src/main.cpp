@@ -8,7 +8,11 @@
 #include <Preferences.h>
 #include "driver/gpio.h"
 
+
 #include "XT_DAC_Audio.h"
+#include "soundMotor.h"
+#include "soundHorn.h"
+
 
 Preferences preferences;
 
@@ -33,6 +37,7 @@ Preferences preferences;
 #define LED_GREEN 1
 #define LED_RED 2
 #define LED_WHITE 4
+#define HORN 8
 
 int rudderPin = RUDDER_PIN;
 int throttlePin = THROTTLE_PIN;
@@ -68,6 +73,15 @@ int rudderAngle;           // +/-  60
 int rudderServoPosition;   // 0-180
 uint8_t mode = 0;
 uint8_t led = 0;
+
+
+XT_Wav_Class MotorSound(motor_wav); 
+XT_Wav_Class HornSound(horn_wav); 
+XT_DAC_Audio_Class DacAudio(25,3);
+
+
+
+
 
 void updateRudderServo(int angle)
 {
@@ -224,6 +238,7 @@ void initLed()
 void setup()
 {
 
+
   preferences.begin("CTBenchy", false);
 
   Serial.begin(115200);
@@ -272,9 +287,17 @@ void setup()
 
   BLEDevice::startAdvertising();
 
+
+
+  Serial.println("Load Preferences!");
+
   loadPreferences();
 
+  Serial.println("Init Led!");
+
   initLed();
+
+  Serial.println("Attach rudder");
 
   // bidirectional set throttle at midpoint when starting
   // program mode set throttle at max when starting
@@ -314,9 +337,14 @@ void updateMode()
     setMode(newMode);
   }
 }
+
+
+
+
 int initCount = 0;
 void loop()
 {
+  bool soundHorn = false;
   updateMode();
   int newThrottlePosition = getThrottle();
   if (newThrottlePosition != throttlePosition)
@@ -334,7 +362,23 @@ void loop()
   if (newled != led)
   {
     setLed(newled);
+    if (newled & HORN) soundHorn=true;
+    else soundHorn=false;
   }
+
+
+/*
+  Serial.printf("play sound MotorSound.Playing %d\r",MotorSound.Playing);
+  // play sound
+  DacAudio.FillBuffer();                // Fill the sound buffer with data
+  if(MotorSound.Playing==false)  {     // if not playing,
+    DacAudio.Play(&MotorSound); 
+  }
+
+  if (newled && HornSound.Playing==false){
+    DacAudio.Play(&HornSound);
+  }
+  */
 
   long t1 = millis();
   if (t1 % 500 == 0)

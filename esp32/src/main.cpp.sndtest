@@ -1,0 +1,47 @@
+// Playing a digital WAV recording repeatadly using the XTronical DAC Audio library
+// prints out to the serial monitor numbers counting up showing that the sound plays 
+// independently of the main loop
+// See www.xtronical.com for write ups on sound, the hardware required and how to make
+// the wav files and include them in your code
+#include <Arduino.h>
+#include "SoundMotor.h"
+#include "SoundHorn.h"
+#include "XT_DAC_Audio.h"
+
+XT_Wav_Class Motor(motor_wav);     // create an object of type XT_Wav_Class that is used by 
+                                      // the dac audio class (below), passing wav data as parameter.
+
+XT_Wav_Class Horn(horn_wav);  
+                                      
+XT_DAC_Audio_Class DacAudio(25,0);    // Create the main player class object. 
+                                      // Use GPIO 25, one of the 2 DAC pins and timer 0
+
+uint32_t DemoCounter=0;               // Just a counter to use in the serial monitor
+                                      // not essential to playing the sound
+
+void setup() {
+  Serial.begin(115200);               // Not needed for sound, just to demo printing to the serial
+                                      // Monitor whilst the sound plays, ensure your serial monitor
+                                      // speed is set to this speed also.
+}
+
+
+void loop() {
+  DacAudio.FillBuffer();                // Fill the sound buffer with data
+  if(Motor.Playing==false ) {
+     Motor.Volume=50;
+     DacAudio.Play(&Motor); 
+    
+
+  } 
+  if (DemoCounter > 10000){
+    if (Horn.Playing == false){
+      Horn.Volume=127;
+      DacAudio.Play(&Horn);
+    }
+    DemoCounter = 1;
+  }
+         // play it, this will cause it to repeat and repeat...
+  Serial.printf("counter %8d playing %2d\r",DemoCounter++,Motor.Playing); 
+         // Showing that the sound will play as well as your code running here.
+}

@@ -19,9 +19,8 @@
 package com.cte.bluetooth
 
 import android.bluetooth.BluetoothGattCharacteristic
-import java.util.*
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.collections.HashMap
 
 /**
  * This class includes subset of standard GATT attributes
@@ -57,9 +56,6 @@ object BluetoothAttributes {
     val PNP_ID = "00002a50" + BTLE_BASE
 
 
-
-
-
     init {
         ignore.put(GENERIC_ACCESS_SERVICE, "generic access service")
         ignore.put(GENERIC_ATTRIBUTE_SERVICE, "generic access service")
@@ -88,13 +84,13 @@ object BluetoothAttributes {
 
     fun lookup(uuid: String, defaultName: String): String {
         var name = attributes.get(uuid)
-        if (name == null){
+        if (name == null) {
             name = binaryAttributes.get(uuid)
         }
         return if (name == null) defaultName else name
     }
 
-    fun isBinary(uuid: String): Boolean{
+    fun isBinary(uuid: String): Boolean {
         val name = binaryAttributes.get(uuid);
         return (name != null)
     }
@@ -104,16 +100,17 @@ object BluetoothAttributes {
         return (name != null)
     }
 
-    fun getCharacteristic(list: ConcurrentHashMap<UUID,BluetoothGattCharacteristic>, uuids: Array<String>) : BluetoothGattCharacteristic?{
-        for (uuid in uuids){
-            if (list.containsKey(UUID.fromString(uuid))){
+    fun getCharacteristic(
+        list: ConcurrentHashMap<UUID, BluetoothGattCharacteristic>,
+        uuids: Array<String>
+    ): BluetoothGattCharacteristic? {
+        for (uuid in uuids) {
+            if (list.containsKey(UUID.fromString(uuid))) {
                 return list.get(UUID.fromString(uuid))
             }
         }
         return null
     }
-
-
 
 
 }

@@ -2,14 +2,19 @@ package com.cte.bluetooth
 
 object Utility {
 
-    fun ByteArrayToMacAddrString(address: ByteArray):String{
-        var macAddressStr = ByteArraytoHex(address,"%02X:")
-        macAddressStr = macAddressStr.substring(0,17) // truncate trailing : and extraneous values if bytearray > 6
+    fun ByteArrayToMacAddrString(address: ByteArray): String {
+        var macAddressStr = ByteArraytoHex(address, "%02X:")
+        macAddressStr = macAddressStr.substring(
+            0,
+            17
+        ) // truncate trailing : and extraneous values if bytearray > 6
         return macAddressStr
     }
-    fun MacAddrStringToByteArray(address: String): ByteArray{
-        return hexStringToByteArray(address.replace(":",""))
+
+    fun MacAddrStringToByteArray(address: String): ByteArray {
+        return hexStringToByteArray(address.replace(":", ""))
     }
+
     fun ByteArraytoHex(bytes: ByteArray?, format: String): String {
         if (bytes != null) {
             val sb = StringBuilder()
@@ -35,8 +40,6 @@ object Utility {
 
         return data
     }
-
-
 
 
 }

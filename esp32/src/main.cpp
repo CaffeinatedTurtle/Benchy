@@ -8,11 +8,9 @@
 #include <Preferences.h>
 #include "driver/gpio.h"
 
-
 #include "XT_DAC_Audio.h"
 #include "soundMotor.h"
-#include "soundHorn1.h"
-
+#include "horn.h"
 
 Preferences preferences;
 
@@ -38,6 +36,7 @@ Preferences preferences;
 #define LED_RED 2
 #define LED_WHITE 4
 #define HORN 8
+#define MOTOR 16
 
 int rudderPin = RUDDER_PIN;
 int throttlePin = THROTTLE_PIN;
@@ -74,19 +73,16 @@ int rudderServoPosition;   // 0-180
 uint8_t mode = 0;
 uint8_t led = 0;
 
+bool soundHorn = true;
+bool motorSound = false;
 
-XT_Wav_Class MotorSound(motor_wav); 
-XT_Wav_Class HornSound(horn_wav); 
-
-
-
-
-
+XT_Wav_Class MotorSound(motor_wav);
+XT_Wav_Class HornSound(horn_wav);
 
 void updateRudderServo(int angle)
 {
 
-  rudderServoPosition = angle + RUDDER_OFFSET+ (MAX_RUDDER / 2);
+  rudderServoPosition = angle + RUDDER_OFFSET + (MAX_RUDDER / 2);
   if (rudderServoPosition > MAX_RUDDER)
     rudderServoPosition = MAX_RUDDER;
   if (rudderServoPosition < MIN_RUDDER)
@@ -187,8 +183,7 @@ uint8_t getLed()
   size_t datalength = pLEDCharacteristic->getLength();
   return *dataPtr;
 }
-
-void setLed(uint8_t value)
+void writeLed(uint8_t value)
 {
   led = value;
   if (led & LED_RED)
@@ -215,6 +210,11 @@ void setLed(uint8_t value)
   {
     gpio_set_level((gpio_num_t)LED_WHITE_PIN, 0);
   }
+}
+
+void setLed(uint8_t value)
+{
+  writeLed(value);
   pLEDCharacteristic->setValue(&led, 1);
   pLEDCharacteristic->indicate();
 }
@@ -238,7 +238,6 @@ void initLed()
 void setup()
 {
 
-
   preferences.begin("CTBenchy", false);
 
   Serial.begin(115200);
@@ -259,21 +258,21 @@ void setup()
       THROTTLE_CHARACTERISTIC_UUID,
       BLECharacteristic::PROPERTY_READ |
           BLECharacteristic::PROPERTY_WRITE |
-          BLECharacteristic::PROPERTY_NOTIFY|
+          BLECharacteristic::PROPERTY_NOTIFY |
           BLECharacteristic::PROPERTY_INDICATE);
   pThrottleCharacteristic->addDescriptor(&throttleNotifyDescriptor);
   pModeCharacteristic = pService->createCharacteristic(
       MODE_CHARACTERISTIC_UUID,
       BLECharacteristic::PROPERTY_READ |
           BLECharacteristic::PROPERTY_WRITE |
-          BLECharacteristic::PROPERTY_NOTIFY|
+          BLECharacteristic::PROPERTY_NOTIFY |
           BLECharacteristic::PROPERTY_INDICATE);
   pModeCharacteristic->addDescriptor(&modeNotifyDescriptor);
   pLEDCharacteristic = pService->createCharacteristic(
       LED_CHARACTERISTIC_UUID,
       BLECharacteristic::PROPERTY_READ |
           BLECharacteristic::PROPERTY_WRITE |
-          BLECharacteristic::PROPERTY_NOTIFY|
+          BLECharacteristic::PROPERTY_NOTIFY |
           BLECharacteristic::PROPERTY_INDICATE);
   pLEDCharacteristic->addDescriptor(&LEDNotifyDescriptor);
 
@@ -285,9 +284,9 @@ void setup()
   pAdvertising->setMinPreferred(0x06); // functions that help with iPhone connections issue
   pAdvertising->setMinPreferred(0x12);
 
+  printf("Advertising started!\n");
+
   BLEDevice::startAdvertising();
-
-
 
   Serial.println("Load Preferences!");
 
@@ -297,6 +296,7 @@ void setup()
 
   initLed();
 
+
   Serial.println("Attach rudder");
 
   // bidirectional set throttle at midpoint when starting
@@ -304,7 +304,7 @@ void setup()
   // unidirectional mode set throttle a 0 when starting
 
   rudder.attach(rudderPin);
-  throttle.attach(throttlePin,Servo::CHANNEL_NOT_ATTACHED, 0, 180,1000,2000);
+  throttle.attach(throttlePin, Servo::CHANNEL_NOT_ATTACHED, 0, 180, 1000, 2000);
 
   setMode(mode);
   setRudderAngle(0);
@@ -325,7 +325,6 @@ void setup()
   setLed(0);
 
   Serial.println("Characteristic defined! Now you can read it in the Client!");
-
 }
 
 void updateMode()
@@ -339,13 +338,14 @@ void updateMode()
   }
 }
 
-
-
-
 int initCount = 0;
+int ledFlash= 0;
+long flashtime = 0;
+long debugtime = 0;
 void loop()
 {
-  bool soundHorn = false;
+uint8_t newled;
+if (connected){
   updateMode();
   int newThrottlePosition = getThrottle();
   if (newThrottlePosition != throttlePosition)
@@ -359,40 +359,54 @@ void loop()
     setRudderAngle(newRudderAngle);
   }
 
-  uint8_t newled = getLed();
+  newled = getLed();
   if (newled != led)
   {
     setLed(newled);
-    if (newled & HORN) soundHorn=true;
-    else soundHorn=false;
+    if (newled & HORN && soundHorn == false)
+      soundHorn = true;
+    else
+      soundHorn = false;
+    if (newled & MOTOR)
+      motorSound = true;
+    else
+      motorSound = false;
   }
+}
 
-
-
-  Serial.printf("play sound MotorSound.Playing %d\r",MotorSound.Playing);
   // play sound
-  static XT_DAC_Audio_Class DacAudio(25,3); // declare DacAudio object
-  DacAudio.FillBuffer();                // Fill the sound buffer with data
-  if(MotorSound.Playing==false)  {     // if not playing,
-    DacAudio.Play(&MotorSound); 
+  static XT_DAC_Audio_Class DacAudio(25, 3); // declare DacAudio object
+  DacAudio.FillBuffer();                     // Fill the sound buffer with data
+  if (motorSound && MotorSound.Playing == false)
+  { // if not playing,
+    DacAudio.Play(&MotorSound);
   }
 
-  if (newled && HornSound.Playing==false){
+
+  if (soundHorn && HornSound.Playing == false)
+  {
     DacAudio.Play(&HornSound);
+    soundHorn = false;
+    newled = newled & ~(HORN);
+    setLed(newled);
   }
- 
 
   long t1 = millis();
-  if (t1 % 500 == 0)
+
+
+  if (t1 % 500 == 0  && t1 != debugtime)
   { // print a debug every 1/2 second
+  debugtime=t1;
     if (pServer->getConnectedCount() <= 0 && connected)
     {
       connected = false;
       if (throttlePosition != 0)
         setThrottle(0);
+      printf("disconnected\n");
       pServer->startAdvertising();
     }
-    else if (pServer->getConnectedCount() == 0){
+    else if (pServer->getConnectedCount() == 0)
+    {
       connected = false;
     }
     else
@@ -414,7 +428,25 @@ void loop()
           setLed(0x0);
         }
       }
+      Serial.printf("rudder angle %03d rudderServo %03d throttle position %03d throttle servo %03d  ledRed: %1x ledWhite %1x ledGreen %1xmode:%03d  connected%02d\r", rudderAngle, rudderServoPosition, throttlePosition, throttleServoPosition, led & LED_RED, led & LED_WHITE, led & LED_GREEN, mode, pServer->getConnectedCount());
     }
-    Serial.printf("rudder angle %d rudderServo %d throttle position %d throttle servo %03d  ledRed: %1x ledWhite %1x ledGreen %1xmode:%d  connected%d\r", rudderAngle, rudderServoPosition, throttlePosition, throttleServoPosition, led & LED_RED, led & LED_WHITE, led & LED_GREEN, mode, pServer->getConnectedCount());
+  }
+  if (t1 %1000 == 0 && t1 != flashtime)
+  {
+    flashtime = t1;
+
+    if (!connected){
+    if (ledFlash == 0)
+      ledFlash = LED_GREEN;
+    else if (ledFlash == LED_GREEN)
+      ledFlash = LED_WHITE;
+    else if (ledFlash == LED_WHITE)
+      ledFlash = LED_RED;
+    else if (ledFlash == LED_RED)
+      ledFlash = LED_GREEN;
+    Serial.printf("adverising :%s %d %d\r", "CTBenchy",ledFlash,t1);
+    writeLed(ledFlash);
+ 
+  }
   }
 }

@@ -31,7 +31,7 @@ class BluetoothService : Service() {
 
     private var bluetoothSocket: BluetoothSocket? = null
 
-    private var isReady =false;
+    private var isReady = false;
 
     // Implements callback methods for GATT events that the app cares about.  For example,
     // connection change and services discovered.
@@ -75,8 +75,8 @@ class BluetoothService : Service() {
         override fun onMtuChanged(gatt: BluetoothGatt?, mtu: Int, status: Int) {
             super.onMtuChanged(gatt, mtu, status)
             Log.v(TAG, "MTU exchanged")
-            isQueueRunning =false;
-            isReady=true;
+            isQueueRunning = false;
+            isReady = true;
             execute()
         }
 
@@ -155,24 +155,24 @@ class BluetoothService : Service() {
     private fun broadcastUpdate(
         action: String,
         characteristic: BluetoothGattCharacteristic
-    ){
+    ) {
         broadcastUpdate(action, characteristic, null)
     }
 
     private fun broadcastUpdate(
         action: String,
         data: ByteArray
-    ){
+    ) {
         broadcastUpdate(action, null, data)
     }
 
-        private fun broadcastUpdate(
-            action: String,
-            characteristic: BluetoothGattCharacteristic?,
-            data: ByteArray?
-        ) {
+    private fun broadcastUpdate(
+        action: String,
+        characteristic: BluetoothGattCharacteristic?,
+        data: ByteArray?
+    ) {
         val intent = Intent(action)
-        characteristic?.let{
+        characteristic?.let {
             intent.putExtra(EXTRA_UUID, it.uuid.toString())
             intent.putExtra(EXTRA_DATA, it.value)
         }
@@ -182,8 +182,6 @@ class BluetoothService : Service() {
 
         sendBroadcast(intent)
     }
-
-
 
 
     inner class LocalBinder : Binder() {
@@ -237,14 +235,14 @@ class BluetoothService : Service() {
         }
     }
 
-    fun pair(address: String?){
+    fun pair(address: String?) {
         val device = bluetoothAdapter!!.getRemoteDevice(address)
         if (device.bondState == BluetoothDevice.BOND_NONE) {
             device.createBond();
         }
     }
 
-    fun isPaired(device: BluetoothDevice?) :Boolean{
+    fun isPaired(device: BluetoothDevice?): Boolean {
         device?.let {
             return it.bondState == BluetoothDevice.BOND_BONDED;
         }
@@ -307,9 +305,9 @@ class BluetoothService : Service() {
             return
         }
         mBluetoothGatt?.let {
-          it.disconnect();
+            it.disconnect();
         }
-        isReady=false;
+        isReady = false;
     }
 
     /**
@@ -318,14 +316,14 @@ class BluetoothService : Service() {
      */
     fun close() {
         mBluetoothGatt?.let {
-            it.close() ;
+            it.close();
             mBluetoothGatt = null
         }
 
     }
 
-    fun isConnected() :Boolean{
-        return (connectionState== STATE_CONNECTED);
+    fun isConnected(): Boolean {
+        return (connectionState == STATE_CONNECTED);
     }
 
     /**
@@ -351,7 +349,7 @@ class BluetoothService : Service() {
      *
      * @param characteristic The characteristic to READ from.
      */
-   private fun writeCharacteristic(characteristic: BluetoothGattCharacteristic) {
+    private fun writeCharacteristic(characteristic: BluetoothGattCharacteristic) {
         if (bluetoothAdapter == null || mBluetoothGatt == null) {
             Log.w(TAG, "BluetoothAdapter not initialized")
             return
@@ -359,7 +357,6 @@ class BluetoothService : Service() {
         Log.i(TAG, "WRITE req characteristic " + characteristic.uuid.toString())
         mBluetoothGatt!!.writeCharacteristic(characteristic)
     }
-
 
 
     /**
@@ -379,7 +376,7 @@ class BluetoothService : Service() {
         mBluetoothGatt!!.setCharacteristicNotification(characteristic, enabled)
 
         // This is specific to enable notifications the characteristice
-        if ( characteristic.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0) {
+        if (characteristic.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0) {
             Log.i(TAG, "update descriptor")
             val descriptor = characteristic.getDescriptor(
                 UUID.fromString(BluetoothAttributes.CLIENT_CHARACTERISTIC_CONFIG)
@@ -391,18 +388,19 @@ class BluetoothService : Service() {
     }
 
 
-    fun postWriteCharacteristic(characteristic: BluetoothGattCharacteristic){
+    fun postWriteCharacteristic(characteristic: BluetoothGattCharacteristic) {
         Log.i(TAG, "post write " + characteristic.uuid)
         rqueue.offer(BTrequest(BTRequestType.WRITE, characteristic, false))
         execute()
     }
 
-    fun postReadCharacteristic(characteristic: BluetoothGattCharacteristic){
+    fun postReadCharacteristic(characteristic: BluetoothGattCharacteristic) {
         Log.i(TAG, "post read " + characteristic.uuid)
         rqueue.offer(BTrequest(BTRequestType.READ, characteristic, false))
         execute()
     }
-    fun postNotifyCharacteristic(characteristic: BluetoothGattCharacteristic, enable: Boolean){
+
+    fun postNotifyCharacteristic(characteristic: BluetoothGattCharacteristic, enable: Boolean) {
         Log.i(TAG, "post notify " + characteristic.uuid)
         rqueue.offer(BTrequest(BTRequestType.NOTIFY, characteristic, enable))
         execute()
@@ -411,7 +409,7 @@ class BluetoothService : Service() {
     fun execute() {
         synchronized(this) {
             Log.d(TAG, "execute: queue size=" + rqueue.size + "Processing= " + isQueueRunning)
-            if (!isReady){
+            if (!isReady) {
                 return
             }
             if (isQueueRunning) {
@@ -429,19 +427,19 @@ class BluetoothService : Service() {
     operator fun next() {
         var request: BTrequest? = null
         synchronized(this) {
-           request = rqueue.poll()
+            request = rqueue.poll()
             if (request == null) {
                 isQueueRunning = false
                 return
             }
 
-        if (request!!.type == BTRequestType.READ) {
-            readCharacteristic(request!!.characteristic)
-        } else if (request!!.type == BTRequestType.WRITE) {
-            writeCharacteristic(request!!.characteristic)
-        } else if (request!!.type == BTRequestType.NOTIFY){
-            setCharacteristicNotification(request!!.characteristic, request!!.enable)
-        }
+            if (request!!.type == BTRequestType.READ) {
+                readCharacteristic(request!!.characteristic)
+            } else if (request!!.type == BTRequestType.WRITE) {
+                writeCharacteristic(request!!.characteristic)
+            } else if (request!!.type == BTRequestType.NOTIFY) {
+                setCharacteristicNotification(request!!.characteristic, request!!.enable)
+            }
         }
     }
 
@@ -457,22 +455,17 @@ class BluetoothService : Service() {
         }
     }
 
-    fun getDevice(address: ByteArray) :BluetoothDevice?{
+    fun getDevice(address: ByteArray): BluetoothDevice? {
         var btDevice: BluetoothDevice? = null
         var macAddressStr = Utility.ByteArrayToMacAddrString(address)
         val bondedDevices: Set<BluetoothDevice> = bluetoothAdapter!!.getBondedDevices()
         for (dev in bondedDevices) {
-            if (dev.address.contains(macAddressStr)){
+            if (dev.address.contains(macAddressStr)) {
                 return dev;
             }
         }
         return btDevice;
     }
-
-
-
-
-
 
 
     @Throws(
@@ -493,19 +486,19 @@ class BluetoothService : Service() {
     }
 
 
-    enum class BTRequestType{
-        NOTIFY,WRITE,READ
+    enum class BTRequestType {
+        NOTIFY, WRITE, READ
     }
+
     inner class BTrequest(
         type: BTRequestType,
         characteristic: BluetoothGattCharacteristic,
         enable: Boolean
-    ){
+    ) {
         val type = type
         val characteristic = characteristic
         val enable = enable
     }
-
 
 
     companion object {
@@ -524,7 +517,6 @@ class BluetoothService : Service() {
         val ACTION_DATA_AVAILABLE = "ccom.cte.bluetooth.ACTION_DATA_AVAILABLE"
         val EXTRA_DATA = "com.cte.bluetooth.EXTRA_DATA"
         val EXTRA_UUID = "ccom.cte.bluetooth.EXTRA_UUID"
-
 
 
     }

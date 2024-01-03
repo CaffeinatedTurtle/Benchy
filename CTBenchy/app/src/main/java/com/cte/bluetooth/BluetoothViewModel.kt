@@ -11,7 +11,6 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.collections.ArrayList
 
 
 @SuppressLint("MissingPermission")
@@ -52,14 +51,14 @@ class BluetoothViewModel : ViewModel() {
 
     fun setServices(services: List<BluetoothGattService>) {
         _services.postValue(services)
-        var tempchars = ConcurrentHashMap<UUID,BluetoothGattCharacteristic>()
-        for (service in services){
-            for(characteristic in service.characteristics){
-                 tempchars.put(characteristic.uuid,characteristic)
+        var tempchars = ConcurrentHashMap<UUID, BluetoothGattCharacteristic>()
+        for (service in services) {
+            for (characteristic in service.characteristics) {
+                tempchars.put(characteristic.uuid, characteristic)
             }
         }
-        _characteristics.value=tempchars
-        Log.i(TAG,"update services and characteristices "+tempchars.size)
+        _characteristics.value = tempchars
+        Log.i(TAG, "update services and characteristices " + tempchars.size)
 
     }
 
@@ -72,10 +71,10 @@ class BluetoothViewModel : ViewModel() {
         setCharacteristics(toHashMap(service.characteristics))
     }
 
-    private fun toHashMap(chars: List<BluetoothGattCharacteristic>): ConcurrentHashMap<UUID, BluetoothGattCharacteristic>{
-        var tempchars = ConcurrentHashMap<UUID,BluetoothGattCharacteristic>()
-        for(characteristic in chars){
-            tempchars.put(characteristic.uuid,characteristic)
+    private fun toHashMap(chars: List<BluetoothGattCharacteristic>): ConcurrentHashMap<UUID, BluetoothGattCharacteristic> {
+        var tempchars = ConcurrentHashMap<UUID, BluetoothGattCharacteristic>()
+        for (characteristic in chars) {
+            tempchars.put(characteristic.uuid, characteristic)
         }
 
         return tempchars
@@ -91,13 +90,14 @@ class BluetoothViewModel : ViewModel() {
         _characteristics.value = characteristics
     }
 
-    val characteristics: LiveData<ConcurrentHashMap<UUID, BluetoothGattCharacteristic>>? = _characteristics
+    val characteristics: LiveData<ConcurrentHashMap<UUID, BluetoothGattCharacteristic>>? =
+        _characteristics
 
-    var _characteristic = MutableLiveData< BluetoothGattCharacteristic>()
+    var _characteristic = MutableLiveData<BluetoothGattCharacteristic>()
 
-    fun setCharacteristic(characteristic:  BluetoothGattCharacteristic) {
+    fun setCharacteristic(characteristic: BluetoothGattCharacteristic) {
         _characteristic.value = characteristic
-        _characteristics.value?.put(characteristic.uuid,characteristic)
+        _characteristics.value?.put(characteristic.uuid, characteristic)
 
     }
 

@@ -1,31 +1,29 @@
 package com.cte.bluetooth
 
 import android.annotation.SuppressLint
-import android.app.Service
 import android.bluetooth.*
 import android.bluetooth.BluetoothDevice.TRANSPORT_LE
 import android.bluetooth.le.BluetoothLeScanner
 import android.content.Context
-import android.content.Intent
-import android.os.Binder
-import android.os.Build
-import android.os.IBinder
 import android.util.Log
-import androidx.annotation.RequiresApi
 import kotlinx.coroutines.*
 import java.lang.reflect.InvocationTargetException
 import java.util.*
 import java.util.concurrent.ConcurrentLinkedDeque
 
 
+interface IBluetoothMgr {
 
-interface IBluetoothMgr{
     fun onConnect()
     fun onDisconnect()
 
     fun onServicesDiscovered()
 
-    fun onDataRecieved(uuid:UUID,value:ByteArray)
+    fun onDataRecieved(uuid: UUID, value: ByteArray)
+
+    fun onConnectionStateChanged(state: Int)
+
+
 }
 
 /**
@@ -41,22 +39,19 @@ class BluetoothMgr {
     private var connectionState = STATE_DISCONNECTED
     private var rqueue = ConcurrentLinkedDeque<BTrequest>()
     private var isQueueRunning = false;
-    lateinit var listener:IBluetoothMgr
-    lateinit var ctx:Context
+    lateinit var listener: IBluetoothMgr
+    private lateinit var ctx: Context
 
 
-
-
-    private var isReady =false;
+    private var isReady = false;
 
     // Implements callback methods for GATT events that the app cares about.  For example,
     // connection change and services discovered.
     private val mGattCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
-            val intentAction: String
-            Log.i(TAG, "newstate " + newState)
+            Log.i(TAG, "newstate $newState")
             if (newState == BluetoothProfile.STATE_CONNECTED) {
-                 connectionState = STATE_CONNECTED
+                connectionState = STATE_CONNECTED
                 Log.i(TAG, "Connected to GATT server.")
                 // Attempts to discover services after successful connection.
                 Log.i(
@@ -67,21 +62,22 @@ class BluetoothMgr {
                 mBluetoothGatt?.discoverServices()
 
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                 connectionState = STATE_DISCONNECTED
+                connectionState = STATE_DISCONNECTED
                 Log.i(TAG, "Disconnected from GATT server.")
                 rqueue.clear()
             }
+            listener.onConnectionStateChanged(connectionState)
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
-            Log.v(TAG, "services discovered status:" + status)
+            Log.v(TAG, "services discovered status:$status")
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                 for (service in gatt.services){
-                     service.characteristics
-                 }
+                for (service in gatt.services) {
+                    service.characteristics
+                }
 
-                 listener.onServicesDiscovered()
-                 execute()
+                listener.onServicesDiscovered()
+                execute()
             } else {
                 Log.w(TAG, "onServicesDiscovered received: $status")
             }
@@ -91,13 +87,12 @@ class BluetoothMgr {
         override fun onMtuChanged(gatt: BluetoothGatt?, mtu: Int, status: Int) {
             super.onMtuChanged(gatt, mtu, status)
             Log.v(TAG, "MTU exchanged")
-            isQueueRunning =false;
-            isReady=true;
+            isQueueRunning = false;
+            isReady = true;
             listener.onConnect()
             execute()
         }
 
-        @RequiresApi(Build.VERSION_CODES.TIRAMISU)
         override fun onCharacteristicRead(
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic,
@@ -115,7 +110,6 @@ class BluetoothMgr {
 
         }
 
-        @RequiresApi(Build.VERSION_CODES.TIRAMISU)
         override fun onCharacteristicWrite(
             gatt: BluetoothGatt?,
             characteristic: BluetoothGattCharacteristic?,
@@ -134,10 +128,11 @@ class BluetoothMgr {
         }
 
 
-        @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-        override fun onCharacteristicChanged (gatt:BluetoothGatt,
-                                              characteristic:   BluetoothGattCharacteristic,
-                                              value:ByteArray) {
+        override fun onCharacteristicChanged(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray
+        ) {
             Log.v(TAG, "characteristic changed " + characteristic.uuid.toString())
             listener.onDataRecieved(characteristic.uuid, value)
             next();
@@ -158,7 +153,6 @@ class BluetoothMgr {
     }
 
 
-
     /**
      * Retrieves a list of supported GATT services on the connected device. This should be
      * invoked only after `BluetoothGatt#discoverServices()` completes successfully.
@@ -168,15 +162,15 @@ class BluetoothMgr {
     val supportedGattServices: List<BluetoothGattService>?
         get() = mBluetoothGatt?.services
 
-   fun getSupportedCharacteristics (service:BluetoothGattService): List<BluetoothGattCharacteristic>? {
-       return service.characteristics
-   }
+    fun getSupportedCharacteristics(service: BluetoothGattService): List<BluetoothGattCharacteristic>? {
+        return service.characteristics
+    }
 
-    fun getCharacteristic(uuid:UUID):BluetoothGattCharacteristic?{
-        mBluetoothGatt?.services?.let { services->
-            for (service in services){
-                for (characteristic in service.characteristics){
-                    if(characteristic.uuid == uuid) return characteristic
+    fun getCharacteristic(uuid: UUID): BluetoothGattCharacteristic? {
+        mBluetoothGatt?.services?.let { services ->
+            for (service in services) {
+                for (characteristic in service.characteristics) {
+                    if (characteristic.uuid == uuid) return characteristic
                 }
             }
 
@@ -185,13 +179,9 @@ class BluetoothMgr {
     }
 
 
-    fun getScanner():BluetoothLeScanner?{
+    fun getScanner(): BluetoothLeScanner? {
         return bluetoothAdapter?.bluetoothLeScanner
     }
-
-
-
-
 
 
     /**
@@ -199,13 +189,14 @@ class BluetoothMgr {
      *
      * @return Return true if the initialization is successful.
      */
-    fun initialize(ctx:Context, listener:IBluetoothMgr): Boolean {
+    fun initialize(ctx: Context, listener: IBluetoothMgr): Boolean {
         // For API level 18 and above, get a reference to BluetoothAdapter through
         // BluetoothManager.
-        this.ctx=ctx
-        this.listener=listener
+        this.ctx = ctx
+        this.listener = listener
         if (bluetoothManager == null) {
-            bluetoothManager = this.ctx.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+            bluetoothManager =
+                this.ctx.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
             if (bluetoothManager == null) {
                 Log.e(TAG, "Unable to initialize BluetoothManager.")
                 return false
@@ -230,14 +221,14 @@ class BluetoothMgr {
         }
     }
 
-    fun pair(address: String?){
+    fun pair(address: String?) {
         val device = bluetoothAdapter!!.getRemoteDevice(address)
         if (device.bondState == BluetoothDevice.BOND_NONE) {
             device.createBond();
         }
     }
 
-    fun isPaired(device: BluetoothDevice?) :Boolean{
+    fun isPaired(device: BluetoothDevice?): Boolean {
         device?.let {
             return it.bondState == BluetoothDevice.BOND_BONDED;
         }
@@ -255,7 +246,7 @@ class BluetoothMgr {
      * callback.
      */
     fun connect(address: String?): Boolean {
-        Log.i(TAG, "try and connect " + address)
+        Log.i(TAG, "try and connect $address")
         if (bluetoothAdapter == null || address == null) {
             Log.w(TAG, "BluetoothAdapter not initialized or unspecified address.")
             return false
@@ -266,11 +257,11 @@ class BluetoothMgr {
             && mBluetoothGatt != null
         ) {
             Log.d(TAG, "Trying to use an existing mBluetoothGatt for connection.")
-            if (mBluetoothGatt!!.connect()) {
+            return if (mBluetoothGatt!!.connect()) {
                 connectionState = STATE_CONNECTING
-                return true
+                true
             } else {
-                return false
+                false
             }
         }
 
@@ -300,9 +291,11 @@ class BluetoothMgr {
             return
         }
         mBluetoothGatt?.let {
-          it.disconnect();
+
+            Log.i(TAG, "disconnect")
+            it.disconnect();
         }
-        isReady=false;
+        isReady = false;
     }
 
     /**
@@ -311,14 +304,14 @@ class BluetoothMgr {
      */
     fun close() {
         mBluetoothGatt?.let {
-            it.close() ;
+            it.close();
             mBluetoothGatt = null
         }
 
     }
 
-    fun isConnected() :Boolean{
-        return (connectionState== STATE_CONNECTED);
+    fun isConnected(): Boolean {
+        return (connectionState == STATE_CONNECTED);
     }
 
     /**
@@ -344,16 +337,18 @@ class BluetoothMgr {
      *
      * @param characteristic The characteristic to READ from.
      */
-   @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-   private fun writeCharacteristic(characteristic: BluetoothGattCharacteristic, value:ByteArray) {
+    private fun writeCharacteristic(characteristic: BluetoothGattCharacteristic, value: ByteArray) {
         if (bluetoothAdapter == null || mBluetoothGatt == null) {
             Log.w(TAG, "BluetoothAdapter not initialized")
             return
         }
         Log.i(TAG, "WRITE req characteristic " + characteristic.uuid.toString())
-        mBluetoothGatt?.writeCharacteristic(characteristic,value,BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+        mBluetoothGatt?.writeCharacteristic(
+            characteristic,
+            value,
+            BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+        )
     }
-
 
 
     /**
@@ -373,26 +368,26 @@ class BluetoothMgr {
         mBluetoothGatt?.setCharacteristicNotification(characteristic, enabled)
 
         // This is specific to enable notifications the characteristice
-        if ( characteristic.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0) {
-            Log.i(TAG,"BATMAN number of characteristics${characteristic.descriptors?.size}")
+        if (characteristic.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0) {
+            Log.i(TAG, "number of characteristics${characteristic.descriptors?.size}")
             val descriptor = characteristic.getDescriptor(
                 UUID.fromString(BluetoothAttributes.CLIENT_CHARACTERISTIC_CONFIG)
             )
             Log.i(TAG, "update descriptor $descriptor")
-            descriptor?.let{
-                mBluetoothGatt?.writeDescriptor(it,BluetoothGattDescriptor.ENABLE_INDICATION_VALUE)
+            descriptor?.let {
+                mBluetoothGatt?.writeDescriptor(it, BluetoothGattDescriptor.ENABLE_INDICATION_VALUE)
             }
 
         }
         // This is specific to enable notifications the characteristice
-        if ( characteristic.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0) {
-            Log.i(TAG,"BATMAN number of characteristics${characteristic.descriptors?.size}")
+        if (characteristic.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0) {
+            Log.i(TAG, "number of characteristics${characteristic.descriptors?.size}")
             val descriptor = characteristic.getDescriptor(
                 UUID.fromString(BluetoothAttributes.CLIENT_CHARACTERISTIC_CONFIG)
             )
             Log.i(TAG, "update descriptor INDICATE $descriptor")
-            descriptor?.let{
-                mBluetoothGatt?.writeDescriptor(it,BluetoothGattDescriptor.ENABLE_INDICATION_VALUE)
+            descriptor?.let {
+                mBluetoothGatt?.writeDescriptor(it, BluetoothGattDescriptor.ENABLE_INDICATION_VALUE)
             }
 
         }
@@ -400,36 +395,38 @@ class BluetoothMgr {
     }
 
 
-    fun postWriteCharacteristic(characteristic: BluetoothGattCharacteristic,value:ByteArray){
+    fun postWriteCharacteristic(characteristic: BluetoothGattCharacteristic, value: ByteArray) {
         Log.i(TAG, "post write " + characteristic.uuid)
-        rqueue.offer(BTrequest(BTRequestType.WRITE, characteristic,value, false))
+        rqueue.offer(BTrequest(BTRequestType.WRITE, characteristic, value, false))
         execute()
     }
 
-    fun postReadCharacteristic(characteristic: BluetoothGattCharacteristic){
+    fun postReadCharacteristic(characteristic: BluetoothGattCharacteristic) {
         Log.i(TAG, "post read " + characteristic.uuid)
-        rqueue.offer(BTrequest(BTRequestType.READ, characteristic, null,false))
-        execute()
-    }
-    fun postNotifyCharacteristic(characteristic: BluetoothGattCharacteristic, enable: Boolean){
-        Log.i(TAG, "post notify " + characteristic.uuid)
-        rqueue.offer(BTrequest(BTRequestType.NOTIFY, characteristic,null, enable))
-        execute()
-    }
-    fun postIndicateCharacteristic(characteristic: BluetoothGattCharacteristic, enable: Boolean){
-        Log.i(TAG, "post notify " + characteristic.uuid)
-        rqueue.offer(BTrequest(BTRequestType.INDICATE, characteristic,null, enable))
+        rqueue.offer(BTrequest(BTRequestType.READ, characteristic, null, false))
         execute()
     }
 
-    fun getQueueSize():Int{
+    fun postNotifyCharacteristic(characteristic: BluetoothGattCharacteristic, enable: Boolean) {
+        Log.i(TAG, "post notify " + characteristic.uuid)
+        rqueue.offer(BTrequest(BTRequestType.NOTIFY, characteristic, null, enable))
+        execute()
+    }
+
+    fun postIndicateCharacteristic(characteristic: BluetoothGattCharacteristic, enable: Boolean) {
+        Log.i(TAG, "post notify " + characteristic.uuid)
+        rqueue.offer(BTrequest(BTRequestType.INDICATE, characteristic, null, enable))
+        execute()
+    }
+
+    fun getQueueSize(): Int {
         return rqueue.size
     }
 
     fun execute() {
         synchronized(this) {
             Log.d(TAG, "execute: queue size=" + rqueue.size + "Processing= " + isQueueRunning)
-            if (!isReady){
+            if (!isReady) {
                 return
             }
             if (isQueueRunning) {
@@ -444,33 +441,35 @@ class BluetoothMgr {
      * Get the next queued request, if any, and perform the requested
      * operation
      */
-    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     operator fun next() {
         var request: BTrequest? = null
         synchronized(this) {
-           request = rqueue.poll()
+            rqueue.poll().also { request = it }
             if (request == null) {
                 isQueueRunning = false
                 return
             }
-        request?.let{ req->
-            when (req.type) {
-                BTRequestType.READ -> {
-                    readCharacteristic(req.characteristic)
-                }
-                BTRequestType.WRITE -> {
-                    req.newValue?.let {
-                        writeCharacteristic(req.characteristic, req.newValue,)
+            request?.let { req ->
+                when (req.type) {
+                    BTRequestType.READ -> {
+                        readCharacteristic(req.characteristic)
+                    }
+
+                    BTRequestType.WRITE -> {
+                        req.newValue?.let {
+                            writeCharacteristic(req.characteristic, req.newValue)
+                        }
+                    }
+
+                    BTRequestType.NOTIFY -> {
+                        setCharacteristicNotification(request!!.characteristic, request!!.enable)
+                    }
+
+                    BTRequestType.INDICATE -> {
+                        setCharacteristicNotification(request!!.characteristic, request!!.enable)
                     }
                 }
-                BTRequestType.NOTIFY -> {
-                    setCharacteristicNotification(request!!.characteristic, request!!.enable)
-                }
-                BTRequestType.INDICATE -> {
-                    setCharacteristicNotification(request!!.characteristic, request!!.enable)
-                }
             }
-        }
 
         }
     }
@@ -487,22 +486,17 @@ class BluetoothMgr {
         }
     }
 
-    fun getDevice(address: ByteArray) :BluetoothDevice?{
+    fun getDevice(address: ByteArray): BluetoothDevice? {
         var btDevice: BluetoothDevice? = null
         var macAddressStr = Utility.ByteArrayToMacAddrString(address)
-        val bondedDevices: Set<BluetoothDevice> = bluetoothAdapter!!.getBondedDevices()
+        val bondedDevices: Set<BluetoothDevice> = bluetoothAdapter!!.bondedDevices
         for (dev in bondedDevices) {
-            if (dev.address.contains(macAddressStr)){
+            if (dev.address.contains(macAddressStr)) {
                 return dev;
             }
         }
         return btDevice;
     }
-
-
-
-
-
 
 
     @Throws(
@@ -523,15 +517,16 @@ class BluetoothMgr {
     }
 
 
-    enum class BTRequestType{
-        NOTIFY,WRITE,READ,INDICATE
+    enum class BTRequestType {
+        NOTIFY, WRITE, READ, INDICATE
     }
+
     inner class BTrequest(
         type: BTRequestType,
         characteristic: BluetoothGattCharacteristic,
-        newValue:ByteArray?,
+        newValue: ByteArray?,
         enable: Boolean
-    ){
+    ) {
         val type = type
         val characteristic = characteristic
         val enable = enable
@@ -539,15 +534,14 @@ class BluetoothMgr {
     }
 
 
-
     companion object {
         private val TAG = BluetoothMgr::class.java.simpleName
 
-        private val STATE_DISCONNECTED = 0
-        private val STATE_CONNECTING = 1
-        private val STATE_CONNECTED = 2
-
-
+        val STATE_CONNECTED = 2
+        val STATE_CONNECTING = 1
+        val STATE_DISCONNECTED = 0
+        val STATE_DISCONNECTING = 3
+        val STATE_SCANNING = 4
 
 
     }

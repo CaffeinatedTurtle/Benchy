@@ -5,13 +5,13 @@
 // the wav files and include them in your code
 #include <Arduino.h>
 #include "SoundMotor.h"
-#include "SoundHorn.h"
+#include "SoundHorn1.h"
 #include "XT_DAC_Audio.h"
 
 XT_Wav_Class Motor(motor_wav);     // create an object of type XT_Wav_Class that is used by 
                                       // the dac audio class (below), passing wav data as parameter.
 
-XT_Wav_Class Horn(horn_wav);  
+XT_Wav_Class Horn(horn1_wav);  
                                       
 XT_DAC_Audio_Class DacAudio(25,0);    // Create the main player class object. 
                                       // Use GPIO 25, one of the 2 DAC pins and timer 0
@@ -34,7 +34,7 @@ void loop() {
     
 
   } 
-  if (DemoCounter > 10000){
+  if (DemoCounter > 5000){
     if (Horn.Playing == false){
       Horn.Volume=127;
       DacAudio.Play(&Horn);

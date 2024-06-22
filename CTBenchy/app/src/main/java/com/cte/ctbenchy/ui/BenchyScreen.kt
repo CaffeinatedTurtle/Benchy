@@ -1,14 +1,16 @@
 package com.cte.ctbenchy.ui
 
 
+import android.content.res.Configuration
 import android.util.Log
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -27,10 +29,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
-import com.cte.bluetooth.BluetoothMgr
+import androidx.compose.ui.unit.sp
 import com.cte.ctbenchy.BenchyHwCtl
 import com.cte.ctbenchy.BenchyHwCtl.Companion.MODE_BI
 import com.cte.ctbenchy.BenchyHwCtl.Companion.MODE_PROG
@@ -60,52 +63,42 @@ fun BenchyScreen(
     val isPressed by interactionSource.collectIsPressedAsState()
     var isSettingsPageVisible by remember { mutableStateOf(false) }
 
-
-    Column(modifier = modifier.padding(10.dp)) {
-
-        when (benchyUiState.connectState) {
-            BluetoothMgr.STATE_CONNECTED -> {
-                Status("CONNECTED")
-            }
-
-            BluetoothMgr.STATE_CONNECTING -> {
-                Status("CONNECTING")
-            }
-
-            BluetoothMgr.STATE_SCANNING -> {
-                Status("SCANNING")
-            }
-
-            BluetoothMgr.STATE_DISCONNECTING -> {
-                Status("DISCONNECTING")
-            }
-
-            BluetoothMgr.STATE_DISCONNECTED -> {
-                Status("DISCONNECTED")
-            }
-        }
-
+    val orientation = LocalConfiguration.current.orientation
+    Column(modifier = modifier
+        .padding(10.dp)
+        .fillMaxWidth(1.0f)) {
 
         Row(
-            modifier = Modifier.padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier
+                .fillMaxWidth(1.0f)
+                .fillMaxHeight(0.65f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            RudderSlider(
-                modifier = Modifier.padding(10.dp),
-                onChange = { benchyHwCtl.setRudder(it) },
-                value = benchyUiState.rudder.toFloat()
-            )
-            ThrottleSlider(
-                modifier = Modifier.padding(10.dp),
-                mode = benchyUiState.mode,
-                onChange = { benchyHwCtl.setThrottle(it) },
-                value = benchyUiState.throttle,
-                limit = benchyUiState.throttleTrim
-            )
+            Column(modifier=modifier.fillMaxWidth(0.5f)) {
+                RudderSlider(
+                    modifier = Modifier
+                        .padding(10.dp),
+                    onChange = { benchyHwCtl.setRudder(it) },
+                    value = benchyUiState.rudder.toFloat()
+                )
+
+            }
+            Column(modifier=modifier.fillMaxWidth(0.5f).fillMaxHeight(1.0f)) {
+
+                ThrottleSlider(
+                    modifier = Modifier.padding(10.dp).fillMaxHeight(1.0f).fillMaxWidth(1.0f),
+                    mode = benchyUiState.mode,
+                    onChange = { benchyHwCtl.setThrottle(it) },
+                    value = benchyUiState.throttle,
+                    limit = benchyUiState.throttleTrim
+                )
+            }
         }
         Row(
-            modifier = Modifier.padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.padding(10.dp).fillMaxWidth(0.75f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             OutlinedButton(
                 onClick = {
@@ -137,29 +130,54 @@ fun BenchyScreen(
                 Text("Stbd")
             }
 
+            if (orientation == Configuration.ORIENTATION_LANDSCAPE){
+                OutlinedButton(
+                    onClick = {
+                        benchyHwCtl.toggleLed(BenchyHwCtl.HORN)
+                    }, colors = ButtonDefaults.textButtonColors(
+                        containerColor = if (isPressed) Color.Blue else Color.LightGray,
+                        contentColor = Color.Black
+                    ), interactionSource = interactionSource
+                ) {
+                    Text("Horn")
+                }
+                OutlinedButton(
+                    onClick = { benchyHwCtl.toggleLed(BenchyHwCtl.MOTOR_SOUND) },
+                    colors = ButtonDefaults.textButtonColors(
+                        containerColor = motorOnColor,
+                        contentColor = Color.Black
+                    )
+                ) {
+                    Text("Motor")
+                }
+            }
+
         }
         Row(
-            modifier = Modifier.padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.padding(10.dp).fillMaxWidth(0.75f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            OutlinedButton(
-                onClick = {
-                    benchyHwCtl.toggleLed(BenchyHwCtl.HORN)
-                }, colors = ButtonDefaults.textButtonColors(
-                    containerColor = if (isPressed) Color.Blue else Color.LightGray,
-                    contentColor = Color.Black
-                ), interactionSource = interactionSource
-            ) {
-                Text("Horn")
-            }
-            OutlinedButton(
-                onClick = { benchyHwCtl.toggleLed(BenchyHwCtl.MOTOR_SOUND) },
-                colors = ButtonDefaults.textButtonColors(
-                    containerColor = motorOnColor,
-                    contentColor = Color.Black
-                )
-            ) {
-                Text("Motor")
+            if (orientation == Configuration.ORIENTATION_PORTRAIT) {
+                OutlinedButton(
+                    onClick = {
+                        benchyHwCtl.toggleLed(BenchyHwCtl.HORN)
+                    }, colors = ButtonDefaults.textButtonColors(
+                        containerColor = if (isPressed) Color.Blue else Color.LightGray,
+                        contentColor = Color.Black
+                    ), interactionSource = interactionSource
+                ) {
+                    Text("Horn")
+                }
+                OutlinedButton(
+                    onClick = { benchyHwCtl.toggleLed(BenchyHwCtl.MOTOR_SOUND) },
+                    colors = ButtonDefaults.textButtonColors(
+                        containerColor = motorOnColor,
+                        contentColor = Color.Black
+                    )
+                ) {
+                    Text("Motor")
+                }
             }
         }
 
@@ -177,9 +195,7 @@ fun RudderSlider(
     var sliderPosition by remember { mutableStateOf(value) }
     Column {
         Slider(
-            modifier = modifier
-                .width(180.dp)
-                .height(50.dp),
+            modifier = modifier,
             value = sliderPosition,
             onValueChange = {
                 sliderPosition = it
@@ -230,10 +246,12 @@ fun ThrottleSlider(
         range = 0f..180f
     }
     Column {
-        Slider(modifier = modifier
+        val modifierAdapt = modifier.fillMaxHeight()
+        Text(text = value.toString())
+        Slider(modifier = modifier.fillMaxWidth(1.0f).fillMaxHeight(1.5f).weight(1.0f,true)
             .graphicsLayer {
                 rotationZ = 270f
-                transformOrigin = TransformOrigin(0f, 0f)
+                transformOrigin = TransformOrigin(0.0f, 0f)
             }
             .layout { measurable, constraints ->
                 val placeable = measurable.measure(
@@ -248,9 +266,8 @@ fun ThrottleSlider(
                     placeable.place(-placeable.width, 0)
                 }
             }
-            .width(180.dp)
-            .height(50.dp),
 
+,
             value = sliderPosition.toFloat(),
             onValueChange = {
                 sliderPosition = it.toInt()
@@ -271,25 +288,35 @@ fun ThrottleSlider(
             steps = steps,
             valueRange = range
         )
-        Text(text = value.toString())
+
     }
 }
 
 @Composable
 fun Status(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Benchy $name",
-        modifier = modifier
-    )
+   Row (modifier=Modifier.fillMaxWidth(0.75f),
+        verticalAlignment = Alignment.CenterVertically){
+        Text(
+            text = "CT Benchy ",
+            fontSize=18.sp,
+            modifier = modifier
+        )
+        Text(
+            text = "$name",
+            fontSize = 14.sp,
+            modifier = modifier.padding(horizontal = 20.dp)
+        )
+    }
+
 }
 
 
-@Preview(showBackground = true)
+@Preview(showBackground = true, heightDp=600, widthDp=900)
 @Composable
 fun ScreenPreview() {
     CTBenchyTheme {
         val benchyHwCtl = BenchyHwCtl(BenchyViewModel())
-        BenchyScreen(benchyHwCtl, modifier = Modifier)
+        BenchyScreen(benchyHwCtl, modifier = Modifier.fillMaxWidth(1.0f))
 
     }
 }

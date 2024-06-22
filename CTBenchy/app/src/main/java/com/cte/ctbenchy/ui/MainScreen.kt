@@ -7,18 +7,40 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import com.cte.bluetooth.BluetoothMgr
 import com.cte.ctbenchy.BenchyHwCtl
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(benchyHwCtl: BenchyHwCtl, modifier: Modifier) {
     var isSettingsPageVisible by remember { mutableStateOf(false) }
+    val benchyUiState by benchyHwCtl.benchyViewModel.uiState.collectAsState()
 
     Scaffold(modifier = modifier,
         topBar = {
             TopAppBar(
                 title = {
-                    Text(text = "CT Benchy")
+                    when (benchyUiState.connectState) {
+                        BluetoothMgr.STATE_CONNECTED -> {
+                            Status("Connected")
+                        }
+
+                        BluetoothMgr.STATE_CONNECTING -> {
+                            Status("Connecting")
+                        }
+
+                        BluetoothMgr.STATE_SCANNING -> {
+                            Status("Scanning")
+                        }
+
+                        BluetoothMgr.STATE_DISCONNECTING -> {
+                            Status("Disconnecting")
+                        }
+
+                        BluetoothMgr.STATE_DISCONNECTED -> {
+                            Status("Disconnected")
+                        }
+                    }
                 },
                 actions = {
                     IconButton(onClick = {

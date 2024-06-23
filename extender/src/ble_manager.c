@@ -169,3 +169,8 @@ void init_ble(void) {
     esp_coex_prefer_t coex_pref = ESP_COEX_PREFER_BT;
     ESP_ERROR_CHECK(esp_coex_preference_set(coex_pref));
 }
+
+void send_ble_data(const char *data) {
+    esp_ble_gatts_send_indicate(profile_tab[PROFILE_APP_IDX].gatts_if, profile_tab[PROFILE_APP_IDX].conn_id,
+                                profile_tab[PROFILE_APP_IDX].char_handle, strlen(data), (uint8_t *)data, false);
+}

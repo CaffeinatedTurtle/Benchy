@@ -11,4 +11,10 @@ void app_main() {
 
     // Initialize BLE
     init_ble();
+
+    
+    ESP_ERROR_CHECK(init_spiffs());
+
+    const char *file_path = "/spiffs/toot.wav";
+    ESP_ERROR_CHECK(play_wav(file_path));
 }

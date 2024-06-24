@@ -1,5 +1,7 @@
 {
     "files.associations": {
-        "dac.h": "c"
+        "dac.h": "c",
+        "inttypes.h": "c",
+        "dac_continuous.h": "c"
     }
 }

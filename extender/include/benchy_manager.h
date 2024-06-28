@@ -2,6 +2,7 @@
 #define BENCHY_MANAGER_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 // Include ESP-IDF logging
 #include "esp_log.h"

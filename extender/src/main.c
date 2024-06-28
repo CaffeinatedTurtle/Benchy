@@ -16,19 +16,23 @@
 void app_main() {
       servo_t servo;
     // Initialize ESP-NOW
-    init_espnow();
+   // init_espnow();
 
     // Initialize BLE
-    init_ble();
+   // init_ble();
 
     
 
     ESP_ERROR_CHECK(init_spiffs());
 
-    const char *file_path = "/spiffs/toot.wav";
-    ESP_ERROR_CHECK(play_wav(file_path));
+     test_audio();
 
-   
+    const char *file_path = "/spiffs/toot.wav";
+ //  ESP_ERROR_CHECK(play_wav(file_path));
+
+  
+
+   /*
     servo_init(&servo, GPIO_NUM_18, LEDC_CHANNEL_0, LEDC_TIMER_0);
 
     while (1) {
@@ -41,7 +45,8 @@ void app_main() {
             vTaskDelay(pdMS_TO_TICKS(500));
         }
     }
+    */
 
 
-    
+
 }

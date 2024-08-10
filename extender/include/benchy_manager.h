@@ -32,28 +32,33 @@
 typedef struct {
     uint8_t mode;
     uint8_t mac_address[6];
-} Configuration;
+} Configuration_t;
 
 typedef struct {
     uint8_t switch_value;
     uint8_t servo_values[4];
-} Operation;
+} Operation_t;
 
 typedef struct {
     uint8_t message_type;
     union {
-        Configuration config;
-        Operation op;
+        Configuration_t config;
+        Operation_t op;
     } payload;
-} BenchMSG; // Renamed from ESPNowMessage
+} BenchyMsg_t; // Renamed from ESPNowMessage
 
-void benchy_create_config(BenchMSG *msg, const Configuration *config);
-void benchy_create_op(BenchMSG *msg, const Operation *op);
-bool benchy_parse(uint8_t *raw_message, BenchMSG *msg);
-int benchy_get_raw(const BenchMSG *msg, uint8_t *raw_message);
+typedef struct {
+   Configuration_t config;
+   Operation_t op;
+} Benchy_t;
+
+void benchy_create_config(BenchyMsg_t *msg, const Configuration_t *config);
+void benchy_create_op(BenchyMsg_t *msg, const Operation_t *op);
+bool benchy_parse(BenchyMsg_t *msg, Benchy_t *data);
 bool benchy_get_switch(uint8_t switch_value, int index);
 void benchy_set_switch(uint8_t *switch_value, int index, bool value);
 const char* benchy_get_switch_name(int index);
-void benchy_print(const BenchMSG *msg);
+void benchy_print(const Benchy_t *msg);
+void benchy_init(Benchy_t *data);
 
 #endif // BENCHY_MANAGER_H

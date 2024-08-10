@@ -27,7 +27,7 @@ static void on_data_recv(const esp_now_recv_info_t *recv_info, const uint8_t *da
         ESP_LOGI(TAG, "Received ESP-NOW data: %s", my_data.command);
 
         // Send the received data over BLE
-        send_ble_data(my_data.command);
+        send_ble_data(my_data.command,sizeof(my_data.command));
     } else {
         ESP_LOGW(TAG, "Received data length exceeds buffer size");
     }

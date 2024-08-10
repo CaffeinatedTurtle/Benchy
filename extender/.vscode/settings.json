@@ -3,6 +3,9 @@
         "dac.h": "c",
         "inttypes.h": "c",
         "dac_continuous.h": "c",
-        "esp_log.h": "c"
+        "esp_log.h": "c",
+        "array": "c",
+        "string_view": "c",
+        "initializer_list": "c"
     }
 }

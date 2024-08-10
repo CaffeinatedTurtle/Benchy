@@ -14,7 +14,7 @@
 #define PROFILE_NUM 1
 #define PROFILE_APP_IDX 0
 #define ESP_APP_ID 0x55
-#define SAMPLE_DEVICE_NAME "ESP32_BLE"
+#define DEVICE_NAME "BENCHY"
 #define SVC_INST_ID 0
 
 static uint8_t adv_config_done = 0;
@@ -115,7 +115,7 @@ void ble_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t 
 void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param) {
     switch (event) {
         case ESP_GATTS_REG_EVT:
-            esp_ble_gap_set_device_name(SAMPLE_DEVICE_NAME);
+            esp_ble_gap_set_device_name(DEVICE_NAME);
             esp_ble_gap_config_adv_data(&adv_data);
             esp_ble_gap_config_adv_data(&scan_rsp_data);
             profile_tab[PROFILE_APP_IDX].service_id.is_primary = true;
@@ -170,7 +170,7 @@ void init_ble(void) {
     ESP_ERROR_CHECK(esp_coex_preference_set(coex_pref));
 }
 
-void send_ble_data(const char *data) {
+void send_ble_data(const char *data, size_t len) {
     esp_ble_gatts_send_indicate(profile_tab[PROFILE_APP_IDX].gatts_if, profile_tab[PROFILE_APP_IDX].conn_id,
-                                profile_tab[PROFILE_APP_IDX].char_handle, strlen(data), (uint8_t *)data, false);
+                                profile_tab[PROFILE_APP_IDX].char_handle, len, (uint8_t *)data, false);
 }

@@ -6,6 +6,7 @@
         "esp_log.h": "c",
         "array": "c",
         "string_view": "c",
-        "initializer_list": "c"
+        "initializer_list": "c",
+        "gpio_types.h": "c"
     }
 }

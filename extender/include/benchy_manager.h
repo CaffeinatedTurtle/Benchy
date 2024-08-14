@@ -6,6 +6,8 @@
 
 // Include ESP-IDF logging
 #include "esp_log.h"
+#include "hal/gpio_types.h"
+
 
 // Define mode values
 #define MODE_UNIDIRECTIONAL 0x01
@@ -28,6 +30,30 @@
 #define SWITCH_AFT 2
 #define SWITCH_MOTOR 3
 #define SWITCH_HORN 4
+
+#define MAX_THROTTLE 180
+#define MIN_THROTTLE 0
+
+#define MAX_RUDDER 110
+#define RUDDER_OFFSET 7
+#define MIN_RUDDER 0
+
+#define MODE_UNI 0
+#define MODE_BI 1
+#define MODE_PROGRAM 2
+
+#define RUDDER_PIN 13
+#define THROTTLE_PIN 12
+
+#define LED_GREEN_PIN GPIO_NUM_5
+#define LED_RED_PIN GPIO_NUM_21
+#define LED_WHITE_PIN GPIO_NUM_19
+
+#define LED_GREEN 1
+#define LED_RED 2
+#define LED_WHITE 4
+#define HORN 8
+#define MOTOR 16
 
 typedef struct {
     uint8_t mode;

@@ -26,6 +26,62 @@ class BenchyManager {
         const val SWITCH_HORN = 4
     }
 
+    import java.nio.ByteBuffer
+    import java.nio.ByteOrder
+
+    data class Configuration(
+        val mode: Byte,
+        val macAddress: ByteArray
+    ) {
+        init {
+            require(macAddress.size == 6) { "MAC address must be 6 bytes long." }
+        }
+
+        fun toByteArray(): ByteArray {
+            val buffer = ByteBuffer.allocate(7)
+            buffer.order(ByteOrder.LITTLE_ENDIAN)
+            buffer.put(mode)
+            buffer.put(macAddress)
+            return buffer.array()
+        }
+    }
+
+    data class Operation(
+        val switchValue: Byte,
+        val servoValues: ByteArray
+    ) {
+        init {
+            require(servoValues.size == 4) { "Servo values array must be 4 bytes long." }
+        }
+
+        fun toByteArray(): ByteArray {
+            val buffer = ByteBuffer.allocate(5)
+            buffer.order(ByteOrder.LITTLE_ENDIAN)
+            buffer.put(switchValue)
+            buffer.put(servoValues)
+            return buffer.array()
+        }
+    }
+
+
+
+    data class Benchy(
+        val config: Configuration,
+        val operation: Operation
+    ) {
+        fun toByteArray(): ByteArray {
+            val configBytes = config.toByteArray()
+            val operationBytes = operation.toByteArray()
+
+            val buffer = ByteBuffer.allocate(configBytes.size + operationBytes.size)
+            buffer.order(ByteOrder.LITTLE_ENDIAN)
+            buffer.put(configBytes)
+            buffer.put(operationBytes)
+            return buffer.array()
+        }
+    }
+
+
     data class Configuration(
         var mode: Byte = 0,
         var macAddress: ByteArray = ByteArray(6)

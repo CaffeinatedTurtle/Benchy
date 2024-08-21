@@ -14,25 +14,24 @@
 #include "benchy_manager.h"
 
 void app_main() {
-     // Initialize ESP-NOW
+     // Initialize ESP-NOWSP_ERROR_CHECK(play_wav(file_path1));
    // init_espnow();
 
-    // Initialize BLE
-   // init_ble();
-   Benchy_t benchy;
+  Benchy_t benchy;
    benchy_init(&benchy);
+   ESP_LOGI("Main", "Size of Benchy_t: %d", sizeof(benchy));
+   esp_log_buffer_hex("Main data", &benchy, sizeof(benchy));
+     // Initialize BLE
+   init_ble(&benchy);
+ 
 
     
 
     ESP_ERROR_CHECK(init_spiffs());
 
-    test_audio();
+    //test_audio();
 
- //    const char *file_path = "/spiffs/toot.wav";
- //    ESP_ERROR_CHECK(play_wav(file_path));
 
- //    const char file_path1 = "/spiffs/tractor.wav";
- //    ESP_ERROR_CHECK(play_wav(file_path1));
 
    /*
     servo_init(&servo, GPIO_NUM_18, LEDC_CHANNEL_0, LEDC_TIMER_0);
@@ -49,8 +48,9 @@ void app_main() {
     }
     */
    while(1){
-       benchy_print(&benchy);
-       vTaskDelay(pdMS_TO_TICKS(2000));
+      // benchy_print(&benchy);
+      
+       vTaskDelay(pdMS_TO_TICKS(15000));
    }
 
 

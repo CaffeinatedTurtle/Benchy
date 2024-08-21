@@ -97,14 +97,15 @@ static void dac_write_data_asynchronously_cycle(dac_continuous_handle_t handle, 
         bufferIndex = audio_data.track;
         uint8_t *data = audio_data.buffers[bufferIndex].data;
         size_t data_size = audio_data.buffers[bufferIndex].size;
-      //  ESP_LOGI(TAG, "cycle Audio %d %d size %d bytes", bufferIndex, audio_data.mode, data_size);
-
+        size_t truncated_size = (data_size / 1024) * 1024;
+        data_size = truncated_size;
+        ESP_LOGI(TAG, "cycle Audio %d %d size %d bytes", bufferIndex, audio_data.mode, data_size);  
         if (audio_data.mode == MODE_SINGLE)
         {
             audio_data.mode = MODE_CYCLE;
             audio_data.track = TRACK_BACKGROUND;
-        }
-
+        } 
+       
         size_t byte_written = 0;
         while (byte_written < data_size)
         {
@@ -113,7 +114,12 @@ static void dac_write_data_asynchronously_cycle(dac_continuous_handle_t handle, 
             ESP_ERROR_CHECK(dac_continuous_write_asynchronously(handle, evt_data.buf, evt_data.buf_size,
                                                                 data + byte_written, data_size - byte_written, &loaded_bytes));
             byte_written += loaded_bytes;
+      
         }
+
+       
+     
+  
     }
     for (int i = 0; i < 4; i++)
     {
@@ -121,7 +127,7 @@ static void dac_write_data_asynchronously_cycle(dac_continuous_handle_t handle, 
         memset(evt_data.buf, 0, evt_data.buf_size);
     }
     }
-     ESP_ERROR_CHECK(dac_continuous_start_async_writing(audio_data.dac_handle));
+    ESP_ERROR_CHECK(dac_continuous_start_async_writing(audio_data.dac_handle));
     vTaskDelay(pdMS_TO_TICKS(1000));
 }
 
@@ -132,12 +138,15 @@ static void dac_write_data_synchronously(dac_continuous_handle_t handle, uint8_t
     ESP_ERROR_CHECK(dac_continuous_disable(handle));
 }
 
+
 static void dac_dma_write_task(void *args)
 {
     audio_data_t *audio = (audio_data_t *)args;
+    play_audio(audio->mode, 44100);
     while (1)
     {
-        play_audio(audio->mode, 44100);
+
+     
 
         vTaskDelay(pdMS_TO_TICKS(10));
     }
@@ -147,6 +156,7 @@ void start_play(int track,int mode)
 {
     audio_data.track = track;
     audio_data.mode = mode;
+
 }
 
 void switch_play(int track, int mode)
@@ -191,13 +201,13 @@ void play_audio(int mode, int sample_rate)
 
     ESP_ERROR_CHECK(dac_continuous_register_event_callback(audio_data.dac_handle, &cbs, audio_queue));
     ESP_LOGI(TAG, "continuous mode enable");
-
     ESP_ERROR_CHECK(dac_continuous_enable(audio_data.dac_handle));
     ESP_LOGI(TAG, "Starting asynchronous write start");
     ESP_ERROR_CHECK(dac_continuous_start_async_writing(audio_data.dac_handle));
     ESP_LOGI(TAG, "Starting asynchronous write");
     audio_data.mode = 1;
     dac_write_data_asynchronously_cycle(audio_data.dac_handle, audio_queue, mode);
+
 }
 
 static void control_task(void *param)
@@ -206,9 +216,9 @@ static void control_task(void *param)
 
     start_play(TRACK_BACKGROUND, MODE_CYCLE);
     vTaskDelay(pdMS_TO_TICKS(2000));
-    ESP_LOGI(TAG, "swith single toot");
+    ESP_LOGI(TAG, "swicth single toot");
     switch_play(TRACK_TOOT, MODE_SINGLE);
-    vTaskDelay(pdMS_TO_TICKS(2000));
+    vTaskDelay(pdMS_TO_TICKS(5000));
     ESP_LOGI(TAG, "start play 3 for .5  second");
 
     switch_play(TRACK_TONE, MODE_CYCLE);

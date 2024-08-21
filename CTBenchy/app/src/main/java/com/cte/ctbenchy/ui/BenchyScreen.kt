@@ -189,7 +189,7 @@ fun BenchyScreen(
 @Composable
 fun RudderSlider(
     modifier: Modifier = Modifier,
-    onChange: (Float) -> Unit = {},
+    onChange: (Int) -> Unit = {},
     value: Float
 ) {
     var sliderPosition by remember { mutableStateOf(value) }
@@ -199,7 +199,7 @@ fun RudderSlider(
             value = sliderPosition,
             onValueChange = {
                 sliderPosition = it
-                onChange(it)
+                onChange(it.toInt())
             },
             colors = SliderDefaults.colors(
                 thumbColor = MaterialTheme.colorScheme.secondary,

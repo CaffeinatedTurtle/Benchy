@@ -28,8 +28,9 @@
 #define SWITCH_STBD 0
 #define SWITCH_PORT 1
 #define SWITCH_AFT 2
-#define SWITCH_MOTOR 3
-#define SWITCH_HORN 4
+#define SWITCH_HORN 3
+#define SWITCH_MOTOR 4
+
 
 #define MAX_THROTTLE 180
 #define MIN_THROTTLE 0
@@ -73,9 +74,10 @@ typedef struct {
     } payload;
 } BenchyMsg_t; // Renamed from ESPNowMessage
 
-typedef struct {
-   Configuration_t config;
-   Operation_t op;
+
+typedef struct __attribute__((packed)) {
+    Configuration_t config;
+    Operation_t op;
 } Benchy_t;
 
 void benchy_create_config(BenchyMsg_t *msg, const Configuration_t *config);
@@ -86,5 +88,6 @@ void benchy_set_switch(uint8_t *switch_value, int index, bool value);
 const char* benchy_get_switch_name(int index);
 void benchy_print(const Benchy_t *msg);
 void benchy_init(Benchy_t *data);
+void benchy_print_raw(const Benchy_t *bench);
 
 #endif // BENCHY_MANAGER_H

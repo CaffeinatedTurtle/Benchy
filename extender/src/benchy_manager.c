@@ -95,6 +95,18 @@ void benchy_print(const Benchy_t *msg) {
    
 }
 
+void benchy_print_raw(const Benchy_t *bench) {
+    const uint8_t *data = (const uint8_t *)bench;
+    size_t size = sizeof(Benchy_t);
+
+    ESP_LOGI("benchy_manager", "Bench data (raw hex):");
+    for (size_t i = 0; i < size; i++) {
+        ESP_LOGI("Bench_manager", "0x%02x", data[i]);
+    }
+}
+
+
+
 
 void benchy_init(Benchy_t *data) {
     Operation_t op = {

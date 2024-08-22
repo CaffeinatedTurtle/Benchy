@@ -1,5 +1,6 @@
 package com.cte.ctbenchy.ui
 
+import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -40,7 +41,7 @@ fun SettingsPage(
     benchyHwCtl: BenchyHwCtl
 ) {
     val benchyUiState by benchyHwCtl.benchyViewModel.uiState.collectAsState()
-    var throttleLimit by remember { mutableStateOf("${benchyUiState.throttleTrim}") }
+    var throttleLimit by remember { mutableStateOf("${benchyUiState.throttleLimit}") }
     var isError by rememberSaveable { mutableStateOf(false) }
 
     fun validate(text: String): Int? {
@@ -75,7 +76,7 @@ fun SettingsPage(
                     .fillMaxWidth(1.0f)
             )
 
-
+            Log.i("BATMAN","BATMAN mode ${benchyUiState.mode.toInt()}")
             ModeDropdown(
                 modifier = Modifier.width(30.dp),
                 mode = benchyUiState.mode.toInt(),
@@ -91,7 +92,7 @@ fun SettingsPage(
                     throttleLimit = it
                     if (it.isNotEmpty()) {
                         validate(it)?.let { trim ->
-                            benchyUiState.throttleTrim = trim
+                            benchyUiState.throttleLimit = trim
                         }
 
                     }

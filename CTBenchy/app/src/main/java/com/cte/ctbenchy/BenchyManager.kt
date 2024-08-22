@@ -1,13 +1,17 @@
 package com.cte.ctbenchy
+import android.util.Log
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 class BenchyManager {
 
     // Define mode values
     companion object {
-        const val MODE_UNIDIRECTIONAL = 0x01.toByte()
-        const val MODE_BIDIRECTIONAL = 0x02.toByte()
-        const val MODE_PROGRAM = 0x03.toByte()
+        const val TAG ="BenchManager"
+        const val MODE_UNIDIRECTIONAL = 0x00.toByte()
+        const val MODE_BIDIRECTIONAL = 0x01.toByte()
+        const val MODE_PROGRAM = 0x02.toByte()
+        val modeNames    = listOf("Uni-Directional", "Bi-Directional", "program")
+
 
         // Define servo channel indexes
         const val SERVO_CHANNEL_1 = 0
@@ -39,10 +43,8 @@ class BenchyManager {
         fun setRudder(data: Benchy, value: Int) {
            // rudder servo scalse -90 to 90 degrees but is limited in the screen slider to -60 to + 60
             var scaledValue = ((value + 90) * 255) / 180 // Map -90..90 to 0..255
-
-            data.operation.servoValues[THROTTLE] = scaledValue.toByte()
-            data.operation.servoValues[RUDDER] = (value + 128).toByte()
-        }
+            data.operation.servoValues[RUDDER] = (scaledValue and 0xff).toByte()
+         }
 
         fun getThrottle(data: Benchy): Int {
 
@@ -57,9 +59,9 @@ class BenchyManager {
             var scaledValue = if (data.config.mode == MODE_BIDIRECTIONAL) {
                 ((value + 90) * 255) / 180 // Map -90..90 to 0..255
             } else {
-                ((value + 90) * 255) / 180 // Map -90..90 to 0..255
+                (value  * 255) / 180 // Map -90..90 to 0..255
             }
-            data.operation.servoValues[THROTTLE] = scaledValue.toByte()
+            data.operation.servoValues[THROTTLE] = (scaledValue and 0xff).toByte()
         }
 
         fun getSwitchValue(data: Benchy, index: Int): Boolean {
@@ -92,15 +94,13 @@ class BenchyManager {
 
         fun printBenchy(benchy: Benchy) {
             val config = benchy.config as? Configuration ?: return
-            println("Message Type: BENCHY_CONFIG")
-            println("Mode: ${config.mode}")
-            println("MAC Address: ${config.macAddress.joinToString(":") { "%02X".format(it) }}")
+            Log.i(TAG,"Mode: ${modeNames[config.mode.toInt()]}")
+            Log.i(TAG,"MAC Address: ${config.macAddress.joinToString(":") { "%02X".format(it) }}")
             val op = benchy.operation as? Operation ?: return
-            println("Message Type: BENCHY_OP")
-            println("Switch Value: ${op.switchValue}")
-            println("Servo Values: ${op.servoValues.joinToString(", ") { it.toString() }}")
-            println("Throttle  ${BenchyManager.getThrottle(benchy)}")
-            println("rudder  ${BenchyManager.getRudder(benchy)}")
+            Log.i(TAG,"Switch Value: ${op.switchValue}")
+            Log.i(TAG,"Throttle  ${BenchyManager.getThrottle(benchy)}")
+            Log.i(TAG,"rudder  ${BenchyManager.getRudder(benchy)}")
+
         }
     }
 

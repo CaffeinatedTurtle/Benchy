@@ -49,14 +49,12 @@ class BluetoothMgr {
     // connection change and services discovered.
     private val mGattCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
-            Log.i(TAG, "newstate $newState")
+            Log.v(TAG, "newstate $newState")
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 connectionState = STATE_CONNECTED
-                Log.i(TAG, "Connected to GATT server.")
-                // Attempts to discover services after successful connection.
                 Log.i(
                     TAG,
-                    "Attempting service discovery:"
+                    "Connected Attempting service discovery:"
                 )
                 rqueue.clear()
                 mBluetoothGatt?.discoverServices()
@@ -326,7 +324,6 @@ class BluetoothMgr {
             Log.w(TAG, "BluetoothAdapter not initialized")
             return
         }
-        Log.i(TAG, "READ req characteristic " + characteristic.uuid.toString())
         mBluetoothGatt!!.readCharacteristic(characteristic)
     }
 
@@ -342,8 +339,7 @@ class BluetoothMgr {
             Log.w(TAG, "BluetoothAdapter not initialized")
             return
         }
-        Log.i(TAG, "WRITE req characteristic " + characteristic.uuid.toString())
-        mBluetoothGatt?.writeCharacteristic(
+         mBluetoothGatt?.writeCharacteristic(
             characteristic,
             value,
             BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
@@ -369,11 +365,11 @@ class BluetoothMgr {
 
         // This is specific to enable notifications the characteristice
         if (characteristic.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0) {
-            Log.i(TAG, "number of characteristics${characteristic.descriptors?.size}")
+            Log.v(TAG, "number of characteristics${characteristic.descriptors?.size}")
             val descriptor = characteristic.getDescriptor(
                 UUID.fromString(BluetoothAttributes.CLIENT_CHARACTERISTIC_CONFIG)
             )
-            Log.i(TAG, "update descriptor $descriptor")
+            Log.v(TAG, "update descriptor $descriptor")
             descriptor?.let {
                 mBluetoothGatt?.writeDescriptor(it, BluetoothGattDescriptor.ENABLE_INDICATION_VALUE)
             }
@@ -381,11 +377,11 @@ class BluetoothMgr {
         }
         // This is specific to enable notifications the characteristice
         if (characteristic.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0) {
-            Log.i(TAG, "number of characteristics${characteristic.descriptors?.size}")
+            Log.v(TAG, "number of characteristics${characteristic.descriptors?.size}")
             val descriptor = characteristic.getDescriptor(
                 UUID.fromString(BluetoothAttributes.CLIENT_CHARACTERISTIC_CONFIG)
             )
-            Log.i(TAG, "update descriptor INDICATE $descriptor")
+            Log.v(TAG, "update descriptor INDICATE $descriptor")
             descriptor?.let {
                 mBluetoothGatt?.writeDescriptor(it, BluetoothGattDescriptor.ENABLE_INDICATION_VALUE)
             }
@@ -396,25 +392,25 @@ class BluetoothMgr {
 
 
     fun postWriteCharacteristic(characteristic: BluetoothGattCharacteristic, value: ByteArray) {
-        Log.i(TAG, "post write " + characteristic.uuid)
+        Log.v(TAG, "post write " + characteristic.uuid)
         rqueue.offer(BTrequest(BTRequestType.WRITE, characteristic, value, false))
         execute()
     }
 
     fun postReadCharacteristic(characteristic: BluetoothGattCharacteristic) {
-        Log.i(TAG, "post read " + characteristic.uuid)
+        Log.v(TAG, "post read " + characteristic.uuid)
         rqueue.offer(BTrequest(BTRequestType.READ, characteristic, null, false))
         execute()
     }
 
     fun postNotifyCharacteristic(characteristic: BluetoothGattCharacteristic, enable: Boolean) {
-        Log.i(TAG, "post notify " + characteristic.uuid)
+        Log.v(TAG, "post notify " + characteristic.uuid)
         rqueue.offer(BTrequest(BTRequestType.NOTIFY, characteristic, null, enable))
         execute()
     }
 
     fun postIndicateCharacteristic(characteristic: BluetoothGattCharacteristic, enable: Boolean) {
-        Log.i(TAG, "post notify " + characteristic.uuid)
+        Log.v(TAG, "post notify " + characteristic.uuid)
         rqueue.offer(BTrequest(BTRequestType.INDICATE, characteristic, null, enable))
         execute()
     }
@@ -425,7 +421,7 @@ class BluetoothMgr {
 
     fun execute() {
         synchronized(this) {
-            Log.d(TAG, "execute: queue size=" + rqueue.size + "Processing= " + isQueueRunning)
+            Log.v(TAG, "execute: queue size=" + rqueue.size + "Processing= " + isQueueRunning)
             if (!isReady) {
                 return
             }

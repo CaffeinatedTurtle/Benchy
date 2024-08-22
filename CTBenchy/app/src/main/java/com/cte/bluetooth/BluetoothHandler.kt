@@ -81,11 +81,7 @@ class BluetoothHandler(
             result.device.name?.let {
                 deviceList[result.device.name] = result
 
-                result.device.uuids?.let {
-                    for (uuit in it) {
-                        // Log.i(TAG, "uuid " + uuit.uuid.toString())
-                    }
-                }
+
                 result.scanRecord?.serviceUuids?.let {
                     for (uuit in it) {
                         Log.i(TAG, "name:${result.device.name} uuid  ${uuit.uuid.toString()}")
@@ -103,7 +99,6 @@ class BluetoothHandler(
 
             }
             if (deviceList.size != currentNumberOfDevices) {
-                Log.i(TAG, "Scan push  " + deviceList.size)
                 devices = ArrayList(deviceList.values)
                 currentNumberOfDevices = deviceList.size
             }
@@ -111,7 +106,7 @@ class BluetoothHandler(
         }
 
         override fun onScanFailed(errorCode: Int) {
-            Log.i(TAG, "Scan error " + errorCode)
+            Log.e(TAG, "Scan error " + errorCode)
             super.onScanFailed(errorCode)
         }
 
@@ -328,7 +323,6 @@ class BluetoothHandler(
     fun writeChangedCharacteristics() {
         bluetoothMgr?.let { mgr ->
             for (changed in updatedCharacteristics) {
-                Log.i(TAG, "update " + changed.key.uuid.toString() + " with:" + changed.value)
                 if (BluetoothAttributes.isBinary(changed.key.uuid.toString())) {
                     changed.key.value = Utility.hexStringToByteArray(changed.value.toString())
                 } else {
@@ -344,7 +338,6 @@ class BluetoothHandler(
 
 
     private fun updateCharacteristic(uuid: String, data: ByteArray) {
-        Log.i(TAG, "updating ${uuid} ${data}")
 
         var characteristic = bluetoothMgr?.getCharacteristic(UUID.fromString(uuid))
         characteristic?.let {
@@ -408,7 +401,6 @@ class BluetoothHandler(
     override fun onDataRecieved(uuid: UUID, value: ByteArray) {
         value?.let { value ->
             uuid?.let {
-                Log.i(TAG, "data available ${it} ${Utility.ByteArraytoHex(value, "%02x")}")
                 listener.onDataRecieved(uuid, value)
             }
         }

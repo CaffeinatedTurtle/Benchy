@@ -91,7 +91,7 @@ fun BenchyScreen(
                     mode = benchyUiState.mode,
                     onChange = { benchyHwCtl.setThrottle(it) },
                     value = benchyUiState.throttle,
-                    limit = benchyUiState.throttleTrim
+                    limit = benchyUiState.throttleLimit
                 )
             }
         }

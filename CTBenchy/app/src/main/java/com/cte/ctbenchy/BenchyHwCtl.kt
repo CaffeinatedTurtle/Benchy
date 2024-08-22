@@ -9,6 +9,7 @@ import com.cte.bluetooth.BluetoothViewModel
 import com.cte.bluetooth.IBluetoothMgr
 import com.cte.ctbenchy.BenchyManager.Companion.MODE_BIDIRECTIONAL
 import com.cte.ctbenchy.BenchyManager.Companion.RUDDER
+import com.cte.ctbenchy.BenchyManager.Companion.THROTTLE
 import com.cte.ctbenchy.BenchyManager.Companion.printBenchy
 import com.cte.ctbenchy.ui.BenchyViewModel
 import java.nio.ByteBuffer
@@ -52,6 +53,12 @@ class BenchyHwCtl(val benchyViewModel: BenchyViewModel) : IBluetoothMgr {
             operation = operation
         )
     }
+    fun updateViewModel(){
+        benchyViewModel.setMode(benchy.config.mode)
+        benchyViewModel.setThrottle(BenchyManager.getThrottle(benchy).toShort())
+        benchyViewModel.setRudder(BenchyManager.getRudder(benchy).toShort())
+        benchyViewModel.setLedMask(benchy.operation.switchValue)
+    }
     fun initialize(ctx: MainActivity) {
         // initialize the bluetooth handler and search for a device that
         // exposes the service UUID
@@ -59,61 +66,61 @@ class BenchyHwCtl(val benchyViewModel: BenchyViewModel) : IBluetoothMgr {
         this.bluetoothHandler = BluetoothHandler(ctx, this, SERVICE_UUID)
         bluetoothHandler?.scan()
         benchyViewModel.setConnectionState(BluetoothMgr.STATE_SCANNING)
-
+        updateViewModel()
 
     }
 
     fun toggleLed(led: Byte) {
-        Log.i(TAG,"BATMAN led ${led}")
         var ledMask = benchyViewModel.uiState.value.ledMask
         ledMask = ledMask xor led
         benchy.operation.switchValue = ledMask
-        bluetoothHandler?.writeCharacteristic(BENCHY_CHARACTERISTIC_UUID, benchy.toByteArray())
-        //bluetoothHandler?.readCharacteristic(LED_CHARACTERISTIC_UUID)
+        updateDevice()
     }
 
     fun setLedMask(ledMask: Byte) {
         benchy.operation.switchValue = ledMask
         val bytes = ByteArray(1)
         bytes[0] = ledMask
-        bluetoothHandler?.writeCharacteristic(BENCHY_CHARACTERISTIC_UUID, benchy.toByteArray())
-        // bluetoothHandler?.readCharacteristic(LED_CHARACTERISTIC_UUID)
+        updateDevice()
     }
 
     fun setMode(mode: Int) {
         benchy.config.mode = mode.toByte()
+        benchyViewModel.setMode(mode.toByte())
         bluetoothHandler?.writeCharacteristic(BENCHY_CHARACTERISTIC_UUID, benchy.toByteArray())
         //bluetoothHandler?.readCharacteristic(MODE_CHARACTERISTIC_UUID)
     }
 
     fun setThrottle(throttle: Int) {
-        Log.i(TAG,"BATMAN sete throttle to ${throttle}")
         BenchyManager.setThrottle(benchy,throttle)
-        if (bluetoothHandler?.currentQueueSize() ?: -1 < 5) {
+        if (bluetoothHandler?.currentQueueSize() ?: -1 < 1) {
             dataQueued.set(false)
         }
         if (dataQueued.compareAndSet(false, true)) {
             // add atomic mutex to only allow one throttle command at a time otherwise
             // they all queue up and that's creates lag. the slider move much faster than
             // the bluetooth can keep up
+            updateDevice()
 
-            bluetoothHandler?.writeCharacteristic(BENCHY_CHARACTERISTIC_UUID, benchy.toByteArray())
         }
 
     }
 
+    fun updateDevice(){
+        bluetoothHandler?.writeCharacteristic(BENCHY_CHARACTERISTIC_UUID, benchy.toByteArray())
+    }
+
     fun setRudder(rudder: Int) {
-        Log.i(TAG,"BATMAN set rudder to ${rudder}")
         BenchyManager.setRudder(benchy,rudder)
-        Log.i(
-            TAG,
-            "lock ${dataQueued.get()} queuesize ${bluetoothHandler?.currentQueueSize() ?: -1}"
-        )
-        if ((bluetoothHandler?.currentQueueSize() ?: -1) < 5) {
+         if (bluetoothHandler?.currentQueueSize() ?: -1 < 1) {
             dataQueued.set(false)
         }
         if (dataQueued.compareAndSet(false, true)) {
-             bluetoothHandler?.writeCharacteristic(BENCHY_CHARACTERISTIC_UUID, benchy.toByteArray())
+            // add atomic mutex to only allow one throttle/rudder command at a time otherwise
+            // they all queue up and that's creates lag. the slider move much faster than
+            // the bluetooth can keep up
+            updateDevice()
+
         }
 
     }
@@ -157,19 +164,18 @@ class BenchyHwCtl(val benchyViewModel: BenchyViewModel) : IBluetoothMgr {
             "receive a value for ${uuid.toString()} ${Utility.ByteArraytoHex(value, "%02x")}"
         )
         val buffer = ByteBuffer.wrap(value).order(ByteOrder.LITTLE_ENDIAN)
-        if ((bluetoothHandler?.currentQueueSize() ?: 0) < 4) {
-            dataQueued.set(false)
-
-        }
+        dataQueued.set(false)
         when (uuid) {
             BENCHY_CHARACTERISTIC_UUID -> {
-                benchy = BenchyManager.Benchy.fromByteArray(value)
-                benchyViewModel.setRudder(BenchyManager.getRudder(benchy).toShort())
-                benchyViewModel.setThrottle(BenchyManager.getThrottle(benchy).toShort())
-                benchyViewModel.setLedMask(benchy.operation.switchValue)
+                var newBenchy = BenchyManager.Benchy.fromByteArray(value)
+                if (newBenchy.operation.servoValues != benchy.operation.servoValues) {
+                    updateDevice()
+                } else {
+                    benchy = newBenchy
+                }
+                updateViewModel()
                 dataQueued.set(false)
                 printBenchy(benchy)
-
             }
 
         }

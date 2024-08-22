@@ -94,6 +94,7 @@ class MainActivity : ComponentActivity() {
         } else {
             benchyHwCtl = BenchyHwCtl( BenchyViewModel())
             benchyHwCtl.initialize(this)
+            benchyHwCtl.updateViewModel();
         }
     }
 

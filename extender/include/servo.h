@@ -19,5 +19,6 @@ typedef struct {
 esp_err_t servo_init(servo_t *servo, gpio_num_t gpio_num, ledc_channel_t channel, ledc_timer_t timer_sel);
 esp_err_t servo_set_angle(servo_t *servo, uint32_t angle);
 esp_err_t servo_deinit(servo_t *servo);
+uint32_t byteToAngle(uint8_t byte);
 
 #endif // SERVO_H

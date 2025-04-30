@@ -11,8 +11,8 @@ android {
         applicationId = "com.cte.ctbenchy"
         minSdk = 33
         targetSdk = 33
-        versionCode = 101
-        versionName = "1.01"
+        versionCode = 102
+        versionName = "1.02"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

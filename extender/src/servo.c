@@ -1,7 +1,13 @@
 #include "servo.h"
 #include "esp_log.h"
+#include "stdint.h"
 
 static const char *TAG = "servo";
+
+uint32_t byteToAngle(uint8_t byte) {
+    // Map byte (0-255) to uint32_t (0-180)
+    return (uint32_t)((byte * 180) / 255);
+}
 
 static uint32_t angle_to_pulsewidth(servo_t *servo, uint32_t angle) {
     return (servo->min_pulsewidth + ((servo->max_pulsewidth - servo->min_pulsewidth) * angle) / SERVO_MAX_ANGLE);

@@ -5,14 +5,14 @@ plugins {
 
 android {
     namespace = "com.cte.ctbenchy"
-    compileSdk = 33
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.cte.ctbenchy"
-        minSdk = 33
-        targetSdk = 33
-        versionCode = 102
-        versionName = "1.02"
+        minSdk = 34
+        targetSdk = 34
+        versionCode = 103
+        versionName = "1.03"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

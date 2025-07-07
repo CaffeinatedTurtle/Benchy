@@ -1,12 +1,22 @@
+/*
+Benchy esp32 BLE controller for CT Benchy
+This version is for the CT Benchy with a single motor and rudder controlled by a  4 channel
+remote control,  channel 2 is the throttle, channel 1 is the rudder. channel 3 is a toggle switch
+on and off for the motor sound, channel 4 is momentary switch short press to sound horn, long press to
+toggle LEDs on and off.
+
+*/
+
+
 #include <Arduino.h>
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEServer.h>
 
-#include <Servo.h>
 
 #include <Preferences.h>
 #include "driver/gpio.h"
+#include "driver/rmt.h"
 
 #include "XT_DAC_Audio.h"
 #include "soundMotor.h"
@@ -14,19 +24,20 @@
 
 Preferences preferences;
 
-#define MAX_THROTTLE 180
-#define MIN_THROTTLE 0
+// RMT configuration for receiving button presses on GPIOs 12 and 13
+// GPIO 12: connected to CHAN_3 (toggle ON/OFF, double click)
+// GPIO 13: connected to CHAN_4 (short/long press)
+#define RMT_RX_CHANNEL_1 RMT_CHANNEL_0
+#define RMT_RX_GPIO_NUM_1 12
 
-#define MAX_RUDDER 110
-#define RUDDER_OFFSET 7
-#define MIN_RUDDER 0
+#define RMT_RX_CHANNEL_2 RMT_CHANNEL_1
+#define RMT_RX_GPIO_NUM_2 13
 
-#define MODE_UNI 0
-#define MODE_BI 1
-#define MODE_PROGRAM 2
+#define RMT_CLK_DIV 80  // 1 μs per tick (80 MHz / 80)
 
-#define RUDDER_PIN 13
-#define THROTTLE_PIN 12
+#define PRESS_THRESHOLD_FREQ 750.0
+#define DOUBLE_CLICK_THRESHOLD_MS 1000
+#define LONG_PRESS_DURATION_MS 1500
 
 #define LED_GREEN_PIN GPIO_NUM_5
 #define LED_RED_PIN GPIO_NUM_21
@@ -38,13 +49,17 @@ Preferences preferences;
 #define HORN 8
 #define MOTOR 16
 
-int rudderPin = RUDDER_PIN;
-int throttlePin = THROTTLE_PIN;
+
+
+enum ButtonState {
+  BUTTON_OFF,
+  BUTTON_ON,              
+  BUTTON_PRESSED_SHORT,   
+  BUTTON_PRESSED_LONG
+};
 
 boolean connected = false;
 
-Servo rudder;
-Servo throttle;
 
 #define SERVICE_UUID "7507cee3-db32-4e5a-bd6b-96b62887129e"
 #define RUDDER_CHARACTERISTIC_UUID "d7c1861c-beff-430f-9a72-fc05c6cc997d"
@@ -73,90 +88,14 @@ int rudderServoPosition;   // 0-180
 uint8_t mode = 0;
 uint8_t led = 0;
 
+
 bool soundHorn = true;
 bool motorSound = false;
 
+bool rcConnected = false;
+
 XT_Wav_Class MotorSound(motor_wav);
 XT_Wav_Class HornSound(horn_wav);
-
-void updateRudderServo(int angle)
-{
-
-  rudderServoPosition = angle + RUDDER_OFFSET + (MAX_RUDDER / 2);
-  if (rudderServoPosition > MAX_RUDDER)
-    rudderServoPosition = MAX_RUDDER;
-  if (rudderServoPosition < MIN_RUDDER)
-    rudderServoPosition = MIN_RUDDER;
-
-  rudder.write(rudderServoPosition);
-  rudderAngle = rudderServoPosition - (MAX_RUDDER / 2) - RUDDER_OFFSET;
-}
-
-void setRudderAngle(int angle)
-{
-  pRudderCharacteristic->setValue(angle);
-  pRudderCharacteristic->indicate();
-
-  rudderAngle = angle;
-  updateRudderServo(angle);
-}
-
-int32_t getRudderAngle()
-{
-  uint8_t *dataPtr = pRudderCharacteristic->getData();
-  size_t datalength = pRudderCharacteristic->getLength();
-  int32_t rudderInput;
-  if (datalength < sizeof(rudderInput))
-  {
-    return rudderAngle;
-  }
-  memcpy(&rudderInput, dataPtr, sizeof(rudderInput));
-
-  return rudderInput;
-}
-void updateThrottleControl(int value)
-{
-  int position = value;
-  if (mode == MODE_BI)
-  {
-    if (value < 0)
-    {
-      position = 90 - (value * -1);
-    }
-    else
-    {
-      position = value + 90; // bi direction 90 is mid point // -90 = full reverse(0) +90= full throttle(100)
-    }
-  }
-  if (position > MAX_THROTTLE)
-    position = MAX_THROTTLE;
-  if (position < MIN_THROTTLE)
-    position = MIN_THROTTLE;
-  throttle.write(position);
-  throttleServoPosition = position;
-  throttlePosition = value;
-}
-
-int setThrottle(int value)
-{
-  int32_t position = value;
-
-  pThrottleCharacteristic->setValue(position);
-  pThrottleCharacteristic->indicate();
-  throttlePosition = position;
-  updateThrottleControl(position);
-  return position;
-}
-
-int getThrottle()
-{
-  uint8_t *dataPtr = pThrottleCharacteristic->getData();
-  size_t datalength = pThrottleCharacteristic->getLength();
-  int position;
-  memcpy(&position, dataPtr, sizeof(position));
-
-  return position;
-}
 
 void setMode(uint8_t newMode)
 {
@@ -234,6 +173,197 @@ void initLed()
   gpio_pad_select_gpio(LED_WHITE_PIN);
   gpio_set_direction((gpio_num_t)LED_WHITE_PIN, GPIO_MODE_OUTPUT);
 }
+const char* stateToString(ButtonState state) {
+  switch (state) {
+    case BUTTON_OFF: return "OFF";
+    case BUTTON_ON: return "ON";
+    case BUTTON_PRESSED_SHORT: return "SHORT_PRESS";
+    case BUTTON_PRESSED_LONG: return "LONG_PRESS";
+    default: return "UNKNOWN";
+  }
+}
+
+struct ButtonTracker {
+  bool wasBelowThreshold = true;
+  unsigned long pressStartTime = 0;
+  ButtonState state = BUTTON_OFF;
+  ButtonState prevState = BUTTON_OFF;
+};
+
+ButtonTracker button12, button13;
+
+// Store latest raw pulse durations
+volatile uint16_t gpio12_high_us = 0, gpio12_low_us = 0;
+volatile uint16_t gpio13_high_us = 0, gpio13_low_us = 0;
+
+void setupRMT(gpio_num_t gpio, rmt_channel_t channel) {
+  rmt_config_t config = RMT_DEFAULT_CONFIG_RX(gpio, channel);
+  config.clk_div = RMT_CLK_DIV;
+  config.rx_config.filter_en = true;
+  config.rx_config.filter_ticks_thresh = 100;
+  config.rx_config.idle_threshold = 10000;
+  rmt_config(&config);
+  rmt_driver_install(config.channel, 2048, 0);
+}
+
+void handleClick() {
+  Serial.println("Button clicked");
+
+  if (motorSound){
+    motorSound= false;
+  } else {
+    motorSound = true;
+  }
+  // Add your click handling logic here
+}
+void handleShortPress() {
+  Serial.println("Button short pressed");
+  rcConnected=true;
+  // Add your short press handling logic here
+  if (soundHorn == true){
+    soundHorn = false;
+  } else {
+    soundHorn = true; 
+  }
+  
+}
+void handleLongPress() {
+  Serial.println("Button long pressed");
+  rcConnected=true;
+  uint8_t value  =led ^ (LED_RED | LED_GREEN | LED_WHITE);
+  writeLed(value); // Toggle all LEDs
+  led=value;
+  // Add your long press handling logic here
+}
+void handleDoubleClick() {
+  Serial.println("Button double clicked leds on ");
+  rcConnected=true;
+  uint8_t value  =led ^ (LED_RED | LED_GREEN | LED_WHITE);
+  writeLed(value); // Toggle all LEDs
+  led=value;
+  // Add your double click handling logic here
+}
+
+// CHAN_3: toggle ON/OFF, double click
+void handleToggleFrequency(float freq, ButtonTracker &tracker)
+{
+    unsigned long now = millis();
+    unsigned long pressDuration = now - tracker.pressStartTime;
+    ButtonState newState = freq >= PRESS_THRESHOLD_FREQ ? BUTTON_ON : BUTTON_OFF;
+    if (newState != tracker.state)
+    {
+       printf("chan 4 button pressed %s %s %u %u %u \n", 
+        stateToString(newState),stateToString(tracker.state), pressDuration,now,tracker.pressStartTime);
+        if (pressDuration < DOUBLE_CLICK_THRESHOLD_MS)
+        {
+           handleDoubleClick();
+            
+        } else {
+          handleClick();
+          
+         
+        }      
+        tracker.prevState = tracker.state; // Store previous state
+        tracker.pressStartTime = now; // Update press start time
+    }
+
+    tracker.state = newState; 
+  
+}
+
+// CHAN_4: short/long press
+void handlePressFrequency(float freq, ButtonTracker &tracker) {
+  unsigned long now = millis();
+  
+ 
+   if (freq >= PRESS_THRESHOLD_FREQ) {
+     tracker.state = BUTTON_ON;  // Set to ON state
+     soundHorn=true;
+  
+     if (tracker.wasBelowThreshold) {
+     tracker.wasBelowThreshold = false;
+      tracker.pressStartTime = now;
+    }
+    // Keep state unchanged while holding
+  } else {
+     soundHorn=false;
+    if (!tracker.wasBelowThreshold) {
+      // Falling edge — button released
+      tracker.wasBelowThreshold = true;
+      unsigned long pressDuration = now - tracker.pressStartTime;
+      if (pressDuration < LONG_PRESS_DURATION_MS) {
+       tracker.state = BUTTON_PRESSED_SHORT;
+       handleShortPress();
+      } else {
+        tracker.state = BUTTON_PRESSED_LONG;
+        handleLongPress();
+      }
+        tracker.pressStartTime = 0;  // Reset start time
+  
+    } else {
+      // Signal still low — no press happening
+       tracker.state = BUTTON_OFF;
+    }
+  }
+}
+
+void processRMT(rmt_channel_t channel, ButtonTracker &tracker, volatile uint16_t &high_us, volatile uint16_t &low_us, void (*handler)(float, ButtonTracker&)) {
+  RingbufHandle_t rb = NULL;
+  rmt_get_ringbuf_handle(channel, &rb);
+  rmt_rx_start(channel, true);
+
+  size_t rx_size;
+  rmt_item32_t* item;
+  while ((item = (rmt_item32_t*)xRingbufferReceive(rb, &rx_size, pdMS_TO_TICKS(10))) != NULL) {
+    int high = item->duration0;
+    int low  = item->duration1;
+    int period = high + low;
+
+    if (period == 0) {
+      vRingbufferReturnItem(rb, (void*)item);
+      continue;
+    }
+
+    float freq = 1000000.0 / period;
+
+    high_us = high;
+    low_us = low;
+
+    handler(freq, tracker);
+
+    vRingbufferReturnItem(rb, (void*)item);
+  }
+}
+
+void printButtonStatesIfChanged() {
+  if (button12.state != button12.prevState || button13.state != button13.prevState) {
+    Serial.printf("[CHAN_3] State: %s\n", stateToString(button12.state));
+    Serial.printf("[CHAN_4] State: %s\n", stateToString(button13.state));
+    button12.prevState = button12.state;
+    button13.prevState = button13.state;
+  }
+}
+
+unsigned long lastPrintTime = 0;
+void printRMTValues() {
+  unsigned long now = millis();
+  if (now - lastPrintTime >= 500) {
+    lastPrintTime = now;
+
+    float freq12 = (gpio12_high_us + gpio12_low_us) > 0 ? 1000000.0 / (gpio12_high_us + gpio12_low_us) : 0;
+    float duty12 = (gpio12_high_us + gpio12_low_us) > 0 ? 100.0 * gpio12_high_us / (gpio12_high_us + gpio12_low_us) : 0;
+
+    float freq13 = (gpio13_high_us + gpio13_low_us) > 0 ? 1000000.0 / (gpio13_high_us + gpio13_low_us) : 0;
+    float duty13 = (gpio13_high_us + gpio13_low_us) > 0 ? 100.0 * gpio13_high_us / (gpio13_high_us + gpio13_low_us) : 0;
+
+    Serial.printf("CHAN_3: High=%dus, Low=%dus, Freq=%.2fHz, Duty=%.2f%% state:%s prev:%s\n",
+                 gpio12_high_us, gpio12_low_us, freq12, duty12, 
+                 stateToString(button12.state),stateToString(button12.prevState));
+    Serial.printf("CHAN_4: High=%dus, Low=%dus, Freq=%.2fHz, Duty=%.2f%% state:%s\n",
+                  gpio13_high_us, gpio13_low_us, freq13, duty13,stateToString(button13.state));
+  }
+}
+
 
 void setup()
 {
@@ -295,36 +425,13 @@ void setup()
   Serial.println("Init Led!");
 
   initLed();
-
-
-  Serial.println("Attach rudder");
-
-  // bidirectional set throttle at midpoint when starting
-  // program mode set throttle at max when starting
-  // unidirectional mode set throttle a 0 when starting
-
-  rudder.attach(rudderPin);
-  throttle.attach(throttlePin, Servo::CHANNEL_NOT_ATTACHED, 0, 180, 1000, 2000);
-
-  setMode(mode);
-  setRudderAngle(0);
-  switch (mode)
-  {
-  case MODE_UNI:
-    setThrottle(0);
-    break;
-  case MODE_BI:
-    setThrottle(0);
-    break;
-  case MODE_PROGRAM:
-    setThrottle(180);
-    break;
-  default:
-    setThrottle(0);
-  }
   setLed(0);
 
   Serial.println("Characteristic defined! Now you can read it in the Client!");
+
+  // Initialize RMT for button presses
+  setupRMT((gpio_num_t)RMT_RX_GPIO_NUM_1, RMT_RX_CHANNEL_1);
+  setupRMT((gpio_num_t)RMT_RX_GPIO_NUM_2, RMT_RX_CHANNEL_2);
 }
 
 void updateMode()
@@ -342,22 +449,19 @@ int initCount = 0;
 int ledFlash= 0;
 long flashtime = 0;
 long debugtime = 0;
+
+// Main loop
 void loop()
 {
+
 uint8_t newled;
+
+processRMT(RMT_RX_CHANNEL_1, button12, gpio12_high_us, gpio12_low_us, handleToggleFrequency);
+processRMT(RMT_RX_CHANNEL_2, button13, gpio13_high_us, gpio13_low_us, handlePressFrequency);
+
 if (connected){
   updateMode();
-  int newThrottlePosition = getThrottle();
-  if (newThrottlePosition != throttlePosition)
-  {
-    setThrottle(newThrottlePosition);
-  }
-
-  int newRudderAngle = getRudderAngle();
-  if (newRudderAngle != rudderAngle)
-  {
-    setRudderAngle(newRudderAngle);
-  }
+ 
 
   newled = getLed();
   if (newled != led)
@@ -372,6 +476,8 @@ if (connected){
     else
       motorSound = false;
   }
+
+
 }
 
   // play sound
@@ -394,14 +500,13 @@ if (connected){
   long t1 = millis();
 
 
-  if (t1 % 500 == 0  && t1 != debugtime)
+  if ((t1 -debugtime)>500  && t1 != debugtime)
   { // print a debug every 1/2 second
   debugtime=t1;
     if (pServer->getConnectedCount() <= 0 && connected)
     {
       connected = false;
-      if (throttlePosition != 0)
-        setThrottle(0);
+    
       printf("disconnected\n");
       pServer->startAdvertising();
     }
@@ -428,10 +533,10 @@ if (connected){
           setLed(0x0);
         }
       }
-      Serial.printf("rudder angle %03d rudderServo %03d throttle position %03d throttle servo %03d  ledRed: %1x ledWhite %1x ledGreen %1xmode:%03d  connected%02d\r", rudderAngle, rudderServoPosition, throttlePosition, throttleServoPosition, led & LED_RED, led & LED_WHITE, led & LED_GREEN, mode, pServer->getConnectedCount());
+      Serial.printf("ledRed: %1x ledWhite %1x ledGreen %1xmode:%03d  connected%02d\r", led & LED_RED, led & LED_WHITE, led & LED_GREEN, mode, pServer->getConnectedCount());
     }
   }
-  if (t1 %1000 == 0 && t1 != flashtime)
+  if ((t1-flashtime) > 1000  && t1 != flashtime && !connected && !rcConnected)
   {
     flashtime = t1;
 
@@ -449,4 +554,5 @@ if (connected){
  
   }
   }
+ 
 }

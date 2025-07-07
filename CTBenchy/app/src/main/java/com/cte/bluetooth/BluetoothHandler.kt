@@ -76,7 +76,7 @@ class BluetoothHandler(
                 ) != PackageManager.PERMISSION_GRANTED
             ) {
                 Log.i(TAG, "MISSING PERMISSIONS")
-                return
+
             }
             result.device.name?.let {
                 deviceList[result.device.name] = result

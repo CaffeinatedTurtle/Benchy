@@ -84,6 +84,13 @@ class MainActivity : ComponentActivity() {
         ) {
             permissionsToRequest.add(android.Manifest.permission.BLUETOOTH_SCAN)
         }
+        if (ContextCompat.checkSelfPermission(
+                this,
+                android.Manifest.permission.BLUETOOTH_CONNECT
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            permissionsToRequest.add(android.Manifest.permission.BLUETOOTH_CONNECT)
+        }
 
         if (permissionsToRequest.isNotEmpty()) {
             ActivityCompat.requestPermissions(

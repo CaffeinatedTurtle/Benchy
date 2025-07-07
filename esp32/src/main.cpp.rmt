@@ -1,0 +1,196 @@
+#include <Arduino.h>
+#include "driver/rmt.h"
+
+
+// RMT configuration for receiving button presses on GPIOs 12 and 13
+// GPIO 12: connected to CHAN_3 (toggle ON/OFF, double click)
+// GPIO 13: connected to CHAN_4 (short/long press)
+#define RMT_RX_CHANNEL_1 RMT_CHANNEL_0
+#define RMT_RX_GPIO_NUM_1 12
+
+#define RMT_RX_CHANNEL_2 RMT_CHANNEL_1
+#define RMT_RX_GPIO_NUM_2 13
+
+#define RMT_CLK_DIV 80  // 1 μs per tick (80 MHz / 80)
+
+#define PRESS_THRESHOLD_FREQ 750.0
+#define DOUBLE_CLICK_THRESHOLD_MS 200
+#define LONG_PRESS_DURATION_MS 1500
+
+enum ButtonState {
+  BUTTON_OFF,
+  BUTTON_ON,              
+  BUTTON_PRESSED_SHORT,   
+  BUTTON_PRESSED_LONG
+};
+
+const char* stateToString(ButtonState state) {
+  switch (state) {
+    case BUTTON_OFF: return "OFF";
+    case BUTTON_ON: return "ON";
+    case BUTTON_PRESSED_SHORT: return "SHORT_PRESS";
+    case BUTTON_PRESSED_LONG: return "LONG_PRESS";
+    default: return "UNKNOWN";
+  }
+}
+
+struct ButtonTracker {
+  bool wasBelowThreshold = true;
+  unsigned long pressStartTime = 0;
+  ButtonState state = BUTTON_OFF;
+  ButtonState prevState = BUTTON_OFF;
+};
+
+ButtonTracker button12, button13;
+
+// Store latest raw pulse durations
+volatile uint16_t gpio12_high_us = 0, gpio12_low_us = 0;
+volatile uint16_t gpio13_high_us = 0, gpio13_low_us = 0;
+
+void setupRMT(gpio_num_t gpio, rmt_channel_t channel) {
+  rmt_config_t config = RMT_DEFAULT_CONFIG_RX(gpio, channel);
+  config.clk_div = RMT_CLK_DIV;
+  config.rx_config.filter_en = true;
+  config.rx_config.filter_ticks_thresh = 100;
+  config.rx_config.idle_threshold = 10000;
+  rmt_config(&config);
+  rmt_driver_install(config.channel, 2048, 0);
+}
+
+// CHAN_3: toggle ON/OFF, double click
+void handleToggleFrequency(float freq, ButtonTracker &tracker)
+{
+    unsigned long now = millis();
+    unsigned long pressDuration = now - tracker.pressStartTime;
+    ButtonState newState = freq >= PRESS_THRESHOLD_FREQ ? BUTTON_ON : BUTTON_OFF;
+    if (newState != tracker.state)
+    {
+         Serial.printf("State change Press duration: %lu ms %s to: %s\n", pressDuration,
+                          stateToString(tracker.state), stateToString(newState));
+        if (pressDuration < DOUBLE_CLICK_THRESHOLD_MS)
+        {
+            Serial.printf("DOUBLE CLICK Press duration: %lu ms %s to: %s\n", pressDuration,
+                          stateToString(tracker.prevState), stateToString(newState));
+        }
+        tracker.prevState = tracker.state; // Store previous state
+        tracker.pressStartTime = now; // Update press start time
+    }
+
+    tracker.state = newState; 
+  
+}
+
+// CHAN_4: short/long press
+void handlePressFrequency(float freq, ButtonTracker &tracker) {
+  unsigned long now = millis();
+  
+ 
+   if (freq >= PRESS_THRESHOLD_FREQ) {
+     tracker.state = BUTTON_ON;  // Set to ON state
+  
+     if (tracker.wasBelowThreshold) {
+          Serial.printf("[CHAN_4] State: %s\n", stateToString(button13.state));
+      tracker.wasBelowThreshold = false;
+      tracker.pressStartTime = now;
+    }
+    // Keep state unchanged while holding
+  } else {
+  
+    if (!tracker.wasBelowThreshold) {
+      // Falling edge — button released
+      tracker.wasBelowThreshold = true;
+      unsigned long pressDuration = now - tracker.pressStartTime;
+      Serial.printf("[CHAN_4] Press duration: %lu ms\n", pressDuration);
+      if (pressDuration < LONG_PRESS_DURATION_MS) {
+       Serial.printf("SHORT PRESS Press duration: %lu ms\n", pressDuration);
+       tracker.state = BUTTON_PRESSED_SHORT;
+      } else {
+        Serial.printf("LONG PRESS Press duration: %lu ms\n", pressDuration);
+        tracker.state = BUTTON_PRESSED_LONG;
+      }
+        tracker.pressStartTime = 0;  // Reset start time
+  
+    } else {
+      // Signal still low — no press happening
+       tracker.state = BUTTON_OFF;
+    }
+  }
+}
+
+void processRMT(rmt_channel_t channel, ButtonTracker &tracker, volatile uint16_t &high_us, volatile uint16_t &low_us, void (*handler)(float, ButtonTracker&)) {
+  RingbufHandle_t rb = NULL;
+  rmt_get_ringbuf_handle(channel, &rb);
+  rmt_rx_start(channel, true);
+
+  size_t rx_size;
+  rmt_item32_t* item;
+  unsigned long startTime = micros();
+while ((item = (rmt_item32_t*)xRingbufferReceive(rb, &rx_size, 0)) != NULL) {
+  if (micros() - startTime > 50000) {  // exit after 5ms
+    Serial.println("Timeout waiting for RMT data");
+    vRingbufferReturnItem(rb, (void*)item);  // prevent memory leak
+    break;
+  }
+    int high = item->duration0;
+    int low  = item->duration1;
+    int period = high + low;
+
+    if (period == 0) {
+      vRingbufferReturnItem(rb, (void*)item);
+      continue;
+    }
+
+    float freq = 1000000.0 / period;
+
+    high_us = high;
+    low_us = low;
+
+    handler(freq, tracker);
+
+    vRingbufferReturnItem(rb, (void*)item);
+  }
+}
+
+void printButtonStatesIfChanged() {
+  if (button12.state != button12.prevState || button13.state != button13.prevState) {
+    Serial.printf("[CHAN_3] State: %s\n", stateToString(button12.state));
+    Serial.printf("[CHAN_4] State: %s\n", stateToString(button13.state));
+    button12.prevState = button12.state;
+    button13.prevState = button13.state;
+  }
+}
+
+unsigned long lastPrintTime = 0;
+void printRMTValues() {
+  unsigned long now = millis();
+  if (now - lastPrintTime >= 500) {
+    lastPrintTime = now;
+
+    float freq12 = (gpio12_high_us + gpio12_low_us) > 0 ? 1000000.0 / (gpio12_high_us + gpio12_low_us) : 0;
+    float duty12 = (gpio12_high_us + gpio12_low_us) > 0 ? 100.0 * gpio12_high_us / (gpio12_high_us + gpio12_low_us) : 0;
+
+    float freq13 = (gpio13_high_us + gpio13_low_us) > 0 ? 1000000.0 / (gpio13_high_us + gpio13_low_us) : 0;
+    float duty13 = (gpio13_high_us + gpio13_low_us) > 0 ? 100.0 * gpio13_high_us / (gpio13_high_us + gpio13_low_us) : 0;
+
+    Serial.printf("CHAN_3: High=%dus, Low=%dus, Freq=%.2fHz, Duty=%.2f%% state:%s prev:%s\n",
+                 gpio12_high_us, gpio12_low_us, freq12, duty12, 
+                 stateToString(button12.state),stateToString(button12.prevState));
+    Serial.printf("CHAN_4: High=%dus, Low=%dus, Freq=%.2fHz, Duty=%.2f%% state:%s\n",
+                  gpio13_high_us, gpio13_low_us, freq13, duty13,stateToString(button13.state));
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  setupRMT((gpio_num_t)RMT_RX_GPIO_NUM_1, RMT_RX_CHANNEL_1);
+  setupRMT((gpio_num_t)RMT_RX_GPIO_NUM_2, RMT_RX_CHANNEL_2);
+}
+
+void loop() {
+  processRMT(RMT_RX_CHANNEL_1, button12, gpio12_high_us, gpio12_low_us, handleToggleFrequency);
+  processRMT(RMT_RX_CHANNEL_2, button13, gpio13_high_us, gpio13_low_us, handlePressFrequency);
+
+  //printButtonStatesIfChanged();
+  //printRMTValues();
+  delay(20);
+}

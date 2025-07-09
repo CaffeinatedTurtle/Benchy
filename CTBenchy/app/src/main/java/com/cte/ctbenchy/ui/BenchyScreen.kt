@@ -51,6 +51,8 @@ fun BenchyScreen(
 
     val motorOnColor =
         if ((benchyUiState.ledMask and 16).toInt() == 16) Color.Magenta else Color.LightGray
+    val hornSoundingColor =
+        if ((benchyUiState.ledMask and 8).toInt() == 8) Color.Blue else Color.LightGray
 
     val portLightColor =
         if ((benchyUiState.ledMask and 2).toInt() == 2) Color.Red else Color.LightGray
@@ -135,7 +137,7 @@ fun BenchyScreen(
                     onClick = {
                         benchyHwCtl.toggleLed(BenchyHwCtl.HORN)
                     }, colors = ButtonDefaults.textButtonColors(
-                        containerColor = if (isPressed) Color.Blue else Color.LightGray,
+                        containerColor = hornSoundingColor,
                         contentColor = Color.Black
                     ), interactionSource = interactionSource
                 ) {

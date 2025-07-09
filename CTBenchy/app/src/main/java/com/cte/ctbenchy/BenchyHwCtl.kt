@@ -64,8 +64,6 @@ class BenchyHwCtl(val benchyViewModel: BenchyViewModel) : IBluetoothMgr {
         // exposes the service UUID
         Log.i(TAG, "INITIALIZE bluetooth handler")
         this.bluetoothHandler = BluetoothHandler(ctx, this, SERVICE_UUID)
-        bluetoothHandler?.scan()
-        benchyViewModel.setConnectionState(BluetoothMgr.STATE_SCANNING)
         updateViewModel()
 
     }
@@ -74,6 +72,7 @@ class BenchyHwCtl(val benchyViewModel: BenchyViewModel) : IBluetoothMgr {
         var ledMask = benchyViewModel.uiState.value.ledMask
         ledMask = ledMask xor led
         benchy.operation.switchValue = ledMask
+        Log.i(TAG,"BATMAN toggle led ${benchy.operation.switchValue}")
         updateDevice()
     }
 
@@ -85,6 +84,7 @@ class BenchyHwCtl(val benchyViewModel: BenchyViewModel) : IBluetoothMgr {
     }
 
     fun setMode(mode: Int) {
+        Log.d(TAG,"set mode ${mode}")
         benchy.config.mode = mode.toByte()
         benchyViewModel.setMode(mode.toByte())
         bluetoothHandler?.writeCharacteristic(BENCHY_CHARACTERISTIC_UUID, benchy.toByteArray())
@@ -107,6 +107,7 @@ class BenchyHwCtl(val benchyViewModel: BenchyViewModel) : IBluetoothMgr {
     }
 
     fun updateDevice(){
+        Log.i(TAG,"BATMAN benchy write characteristic ${benchy.toByteArray()}")
         bluetoothHandler?.writeCharacteristic(BENCHY_CHARACTERISTIC_UUID, benchy.toByteArray())
     }
 
@@ -168,11 +169,7 @@ class BenchyHwCtl(val benchyViewModel: BenchyViewModel) : IBluetoothMgr {
         when (uuid) {
             BENCHY_CHARACTERISTIC_UUID -> {
                 var newBenchy = BenchyManager.Benchy.fromByteArray(value)
-                if (newBenchy.operation.servoValues != benchy.operation.servoValues) {
-                    updateDevice()
-                } else {
-                    benchy = newBenchy
-                }
+                benchy = newBenchy
                 updateViewModel()
                 dataQueued.set(false)
                 printBenchy(benchy)

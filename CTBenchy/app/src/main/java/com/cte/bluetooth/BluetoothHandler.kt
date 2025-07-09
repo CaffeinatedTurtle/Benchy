@@ -297,12 +297,13 @@ class BluetoothHandler(
         bluetoothMgr?.let { mgr ->
             if (mgr.isConnected()) {
                 val characteristic = mgr.getCharacteristic(uuid)
+                Log.i(TAG,"notify characteristic $uuid")
                 characteristic?.let {
                     if (isCharacteristicIndicate(it)) {
                         mgr.postNotifyCharacteristic(it, enable)
                     }
                     if (isCharacteristicNotifiable(it)) {
-                        mgr?.postNotifyCharacteristic(it, enable)
+                        mgr.postNotifyCharacteristic(it, enable)
                     } else {
                         Log.e(TAG, "characteristic not notifiable")
                     }
@@ -399,7 +400,7 @@ class BluetoothHandler(
     }
 
     override fun onDataRecieved(uuid: UUID, value: ByteArray) {
-        value?.let { value ->
+         value?.let { value ->
             uuid?.let {
                 listener.onDataRecieved(uuid, value)
             }

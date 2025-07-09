@@ -33,6 +33,17 @@ class BluetoothService : Service() {
 
     private var isReady = false;
 
+
+    fun enableNotification(characteristic: BluetoothGattCharacteristic, bluetoothGatt:BluetoothGatt) {
+        val cccdUuid = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+        bluetoothGatt.setCharacteristicNotification(characteristic, true)
+
+        val descriptor = characteristic.getDescriptor(cccdUuid)
+        descriptor?.let {
+            it.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            bluetoothGatt.writeDescriptor(it)
+        }
+    }
     // Implements callback methods for GATT events that the app cares about.  For example,
     // connection change and services discovered.
     private val mGattCallback = object : BluetoothGattCallback() {
@@ -63,6 +74,7 @@ class BluetoothService : Service() {
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             Log.v(TAG, "services discovered status:" + status)
+
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 broadcastUpdate(ACTION_GATT_SERVICES_DISCOVERED)
                 execute()
@@ -79,6 +91,8 @@ class BluetoothService : Service() {
             isReady = true;
             execute()
         }
+
+
 
         override fun onCharacteristicRead(
             gatt: BluetoothGatt,
@@ -113,12 +127,25 @@ class BluetoothService : Service() {
 
         }
 
+        override fun onCharacteristicChanged(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray
+        ) {
+            super.onCharacteristicChanged(gatt, characteristic, value)
+            Log.v(TAG, "characteristic changed " + characteristic.uuid.toString())
+            broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic)
+            Log.i(TAG,"BATMAN ${Utility.ByteArraytoHex(value,"02X ")}")
+            next();
+        }
+
+
 
         override fun onCharacteristicChanged(
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic
         ) {
-            Log.v(TAG, "characteristic changed " + characteristic.uuid.toString())
+            Log.v(TAG, "dep characteristic changed " + characteristic.uuid.toString())
             next();
             broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic)
 

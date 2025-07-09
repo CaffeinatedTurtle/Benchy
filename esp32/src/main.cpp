@@ -20,7 +20,8 @@ toggle LEDs on and off.
 
 #include "XT_DAC_Audio.h"
 #include "soundMotor.h"
-#include "horn.h"
+#include "toot.h"
+#include "benchy.h"
 
 Preferences preferences;
 
@@ -61,67 +62,51 @@ enum ButtonState {
 boolean connected = false;
 
 
+
 #define SERVICE_UUID "7507cee3-db32-4e5a-bd6b-96b62887129e"
-#define RUDDER_CHARACTERISTIC_UUID "d7c1861c-beff-430f-9a72-fc05c6cc997d"
-#define THROTTLE_CHARACTERISTIC_UUID "87607759-37d1-41b5-b2c8-c44b7c746083"
-#define MODE_CHARACTERISTIC_UUID "16d68508-2fd4-40a9-ba61-aac41cb81e45"
-#define LED_CHARACTERISTIC_UUID "3a84a192-d522-46ef-b7c8-36b9fc062490"
+#define BENCHY_CHARACTERISTIC_UUID "d7c1861c-beff-430f-9a72-fc05c6cc997d"
+
 
 BLEServer *pServer;
 BLEService *pService;
 BLEUUID ClientNotifyDescriptorUuid = BLEUUID((uint16_t)0x2902);
-BLECharacteristic *pRudderCharacteristic; // 0 -180 degrees
-BLEDescriptor rudderNotifyDescriptor = BLEDescriptor(ClientNotifyDescriptorUuid, 100);
-BLECharacteristic *pThrottleCharacteristic; //  0 - 100
-BLEDescriptor throttleNotifyDescriptor = BLEDescriptor(ClientNotifyDescriptorUuid, 100);
-BLECharacteristic *pModeCharacteristic; // 0= unidirectional, 1 = bidirectional 2 = programming mode
-BLEDescriptor modeNotifyDescriptor = BLEDescriptor(ClientNotifyDescriptorUuid, 100);
-BLECharacteristic *pLEDCharacteristic; // flags for up to 8 leds
-BLEDescriptor LEDNotifyDescriptor = BLEDescriptor(ClientNotifyDescriptorUuid, 100);
+BLECharacteristic *pBenchyCharacteristic; // characteristic for Benchy data
+BLEDescriptor benchyNotifyDescriptor = BLEDescriptor(ClientNotifyDescriptorUuid, 100);
+
 
 uint8_t ledFlags = 0;
 
-int throttlePosition;      // +/-  100
-int throttleServoPosition; // 0 - 180
-int rudderAngle;           // +/-  60
-int rudderServoPosition;   // 0-180
 uint8_t mode = 0;
 uint8_t led = 0;
 
 
 bool soundHorn = true;
+bool soundingHorn = false;
 bool motorSound = false;
+
+bool ledOn = false;
 
 bool rcConnected = false;
 
 XT_Wav_Class MotorSound(motor_wav);
+
 XT_Wav_Class HornSound(horn_wav);
 
-void setMode(uint8_t newMode)
+void setBenchy(uint8_t *newValue)
 {
-  mode = newMode;
-  pModeCharacteristic->setValue(&mode, 1);
-  pModeCharacteristic->indicate();
+
+  pBenchyCharacteristic->setValue(newValue, sizeof(Benchy_t));
+  pBenchyCharacteristic->indicate();
 }
 
-void saveMode()
-{
-  preferences.putUChar("mode", mode);
-}
 
-uint8_t getMode()
+uint8_t getBenchy()
 {
-  uint8_t *dataPtr = pModeCharacteristic->getData();
-  size_t datalength = pModeCharacteristic->getLength();
+  uint8_t *dataPtr = pBenchyCharacteristic->getData();
+  size_t datalength = pBenchyCharacteristic->getLength();
   return *dataPtr;
 }
 
-uint8_t getLed()
-{
-  uint8_t *dataPtr = pLEDCharacteristic->getData();
-  size_t datalength = pLEDCharacteristic->getLength();
-  return *dataPtr;
-}
 void writeLed(uint8_t value)
 {
   led = value;
@@ -154,8 +139,7 @@ void writeLed(uint8_t value)
 void setLed(uint8_t value)
 {
   writeLed(value);
-  pLEDCharacteristic->setValue(&led, 1);
-  pLEDCharacteristic->indicate();
+  
 }
 
 void loadPreferences()
@@ -219,8 +203,9 @@ void handleClick() {
 void handleShortPress() {
   Serial.println("Button short pressed");
   rcConnected=true;
+
   // Add your short press handling logic here
-  if (soundHorn == true){
+  if (soundHorn == true  && !soundingHorn) {
     soundHorn = false;
   } else {
     soundHorn = true; 
@@ -230,7 +215,16 @@ void handleShortPress() {
 void handleLongPress() {
   Serial.println("Button long pressed");
   rcConnected=true;
-  uint8_t value  =led ^ (LED_RED | LED_GREEN | LED_WHITE);
+  uint8_t value  =0;
+  if (ledOn == false){
+    ledOn = true;
+    value = LED_RED | LED_GREEN | LED_WHITE; // Turn on all LEDs
+    
+  } else {
+    ledOn = false;
+    value = 0 ;// Turn off all LEDs
+  }
+
   writeLed(value); // Toggle all LEDs
   led=value;
   // Add your long press handling logic here
@@ -278,7 +272,7 @@ void handlePressFrequency(float freq, ButtonTracker &tracker) {
  
    if (freq >= PRESS_THRESHOLD_FREQ) {
      tracker.state = BUTTON_ON;  // Set to ON state
-     soundHorn=true;
+    
   
      if (tracker.wasBelowThreshold) {
      tracker.wasBelowThreshold = false;
@@ -286,7 +280,7 @@ void handlePressFrequency(float freq, ButtonTracker &tracker) {
     }
     // Keep state unchanged while holding
   } else {
-     soundHorn=false;
+   
     if (!tracker.wasBelowThreshold) {
       // Falling edge — button released
       tracker.wasBelowThreshold = true;
@@ -377,34 +371,18 @@ void setup()
   BLEDevice::init("CTBenchy");
   pServer = BLEDevice::createServer();
   pService = pServer->createService(SERVICE_UUID);
-  pRudderCharacteristic = pService->createCharacteristic(
-      RUDDER_CHARACTERISTIC_UUID,
+
+  pBenchyCharacteristic = pService->createCharacteristic(
+      BENCHY_CHARACTERISTIC_UUID,
       BLECharacteristic::PROPERTY_READ |
-          BLECharacteristic::PROPERTY_WRITE |
-          BLECharacteristic::PROPERTY_NOTIFY |
-          BLECharacteristic::PROPERTY_INDICATE);
-  pRudderCharacteristic->addDescriptor(&rudderNotifyDescriptor);
-  pThrottleCharacteristic = pService->createCharacteristic(
-      THROTTLE_CHARACTERISTIC_UUID,
-      BLECharacteristic::PROPERTY_READ |
-          BLECharacteristic::PROPERTY_WRITE |
-          BLECharacteristic::PROPERTY_NOTIFY |
-          BLECharacteristic::PROPERTY_INDICATE);
-  pThrottleCharacteristic->addDescriptor(&throttleNotifyDescriptor);
-  pModeCharacteristic = pService->createCharacteristic(
-      MODE_CHARACTERISTIC_UUID,
-      BLECharacteristic::PROPERTY_READ |
-          BLECharacteristic::PROPERTY_WRITE |
-          BLECharacteristic::PROPERTY_NOTIFY |
-          BLECharacteristic::PROPERTY_INDICATE);
-  pModeCharacteristic->addDescriptor(&modeNotifyDescriptor);
-  pLEDCharacteristic = pService->createCharacteristic(
-      LED_CHARACTERISTIC_UUID,
-      BLECharacteristic::PROPERTY_READ |
-          BLECharacteristic::PROPERTY_WRITE |
-          BLECharacteristic::PROPERTY_NOTIFY |
-          BLECharacteristic::PROPERTY_INDICATE);
-  pLEDCharacteristic->addDescriptor(&LEDNotifyDescriptor);
+      BLECharacteristic::PROPERTY_WRITE |
+      BLECharacteristic::PROPERTY_NOTIFY |
+      BLECharacteristic::PROPERTY_INDICATE);
+
+  pBenchyCharacteristic->addDescriptor(&benchyNotifyDescriptor);
+  pBenchyCharacteristic->setCallbacks(new BenchyCallbacks());
+
+
 
   pService->start();
   BLEDevice::setPower(ESP_PWR_LVL_P9, ESP_BLE_PWR_TYPE_DEFAULT);
@@ -434,16 +412,10 @@ void setup()
   setupRMT((gpio_num_t)RMT_RX_GPIO_NUM_2, RMT_RX_CHANNEL_2);
 }
 
-void updateMode()
-{
-  uint8_t newMode = getMode();
-  if (newMode != mode)
-  {
-    mode = newMode;
-    saveMode();
-    setMode(newMode);
-  }
-}
+
+
+
+
 
 int initCount = 0;
 int ledFlash= 0;
@@ -458,44 +430,66 @@ uint8_t newled;
 
 processRMT(RMT_RX_CHANNEL_1, button12, gpio12_high_us, gpio12_low_us, handleToggleFrequency);
 processRMT(RMT_RX_CHANNEL_2, button13, gpio13_high_us, gpio13_low_us, handlePressFrequency);
-
-if (connected){
-  updateMode();
+static XT_DAC_Audio_Class DacAudio(25, 3); // declare DacAudio object
  
+if (connected){
+ 
+  uint8_t newLed = benchy.op.switch_value;
 
-  newled = getLed();
-  if (newled != led)
+  if (newLed != led)
   {
-    setLed(newled);
-    if (newled & HORN && soundHorn == false)
+    printf("led changed from %0x to %0x\n", led, newLed);
+    setLed(newLed);
+    if (newLed & HORN && soundHorn == false)
       soundHorn = true;
     else
       soundHorn = false;
-    if (newled & MOTOR)
+
+    if (newLed & MOTOR)
       motorSound = true;
     else
       motorSound = false;
+    // acknowledge the change unless the horn is being sounded
+    if (!soundHorn) setBenchy((uint8_t *)&benchy); // send the new value
+    printBenchy(benchy, "Benchy updated in loop");
+     
   }
+
 
 
 }
 
   // play sound
-  static XT_DAC_Audio_Class DacAudio(25, 3); // declare DacAudio object
-  DacAudio.FillBuffer();                     // Fill the sound buffer with data
+   DacAudio.FillBuffer();                     // Fill the sound buffer with data
   if (motorSound && MotorSound.Playing == false)
   { // if not playing,
+    MotorSound.Repeat;
+    DacAudio.DacVolume=127;
     DacAudio.Play(&MotorSound);
+  } 
+  if (MotorSound.Playing == true  && !motorSound)
+  {
+    DacAudio.StopAllSounds(); // stop the sound if motorSound is false  
   }
 
 
   if (soundHorn && HornSound.Playing == false)
   {
-    DacAudio.Play(&HornSound);
-    soundHorn = false;
-    newled = newled & ~(HORN);
-    setLed(newled);
+    // start playing horn sound
+    DacAudio.DacVolume=127;
+    DacAudio.Play(&HornSound,true);
+    soundHorn=false;
+    soundingHorn = true;   
   }
+  if (soundingHorn && HornSound.Playing == false)
+{
+    // sounding horn has finished
+    soundingHorn = false;
+    benchy.op.switch_value &= ~HORN; // clear the horn bit
+  
+    setBenchy((uint8_t *)&benchy); // send the new value
+    //printBenchy(benchy);
+}
 
   long t1 = millis();
 
@@ -552,7 +546,7 @@ if (connected){
     Serial.printf("adverising :%s %d %d\r", "CTBenchy",ledFlash,t1);
     writeLed(ledFlash);
  
-  }
+  } 
   }
  
 }
